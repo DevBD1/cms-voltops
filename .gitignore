@@ -9,3 +9,5 @@ __pycache__
 .venv
 voltops/web/dist
 */.DS_Store
+.DS_Store
+.turbo/.DS_Store
