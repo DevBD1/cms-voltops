@@ -1,0 +1,10 @@
+node_modules
+.pnpm-store
+.turbo
+.env
+.env.*
+!.env.example
+__pycache__
+*.pyc
+.venv
+voltops/web/dist
