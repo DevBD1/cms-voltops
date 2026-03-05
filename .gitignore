@@ -8,3 +8,4 @@ __pycache__
 *.pyc
 .venv
 voltops/web/dist
+*/.DS_Store
