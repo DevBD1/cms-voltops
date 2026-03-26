@@ -1,0 +1,16 @@
+{
+  "name": "@voltops/config",
+  "private": true,
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "start": "echo \"Config package - no start script\"",
+    "lint": "echo \"No lint configured yet\""
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
