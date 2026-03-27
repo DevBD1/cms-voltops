@@ -19,23 +19,24 @@ Sonuç olarak VoltOps, elektrikli araç şarj istasyonu yönetimi senaryosu üze
 ## Geliştirme Ortamı
 MVP düzeyinde stack böyledir:
 - PostgreSQL: ana DB
-- FastAPI: API
-- SQLAlchemy + Alembic: ORM + migration
+- Node.js Express: API
+- Drizzle: ORM, config and SQL migrations
 - pgAdmin: veritabanı için GUI aracı
-- Redis: cache / rate limit / queue yardımcı servis
+- Redis: cache / rate limit / queue yarvis
 - Nginx: reverse proxy
 - Docker Compose: lokal orkestrasyon
+- Dozzle: log görüntüleme
 
 ## Projenin Yüklenmesi ve Çalıştırılması
-Turbo-repo with:
+pnpm monorepo with:
 - `voltops/database`: PostgreSQL + TimescaleDB (Docker Compose)
-- `voltops/api`: Python FastAPI
+- `voltops/api`: Node.js Express
 - `voltops/web`: React (Vite)
+- `voltops/mobile`: React Native Expo
 
 ### Ön Gereklilikler
 - Node.js 20+
 - pnpm 9+
-- Python 3.10+
 - Docker + Docker Compose
 
 ### Install
