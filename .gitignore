@@ -1,13 +1,51 @@
-node_modules
+# Dependencies & OS
+node_modules/
 .pnpm-store
+.DS_Store
+*/.DS_Store
+Thumbs.db
+
+# Environment & Logs
+.env*
 .env
 .env.*
-!.env.example
+*.local
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Global Build Tooling
+dist/
+*/dist
+dist
+build/
+dist-ssr
+
+# IDEs and Editors
+.idea
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python
 __pycache__
 *.pyc
 .venv
-*/dist
-dist
-*/.DS_Store
-.DS_Store
-.DS_Store

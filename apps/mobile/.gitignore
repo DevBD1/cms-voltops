@@ -1,0 +1,6 @@
+# Mobile App
+.expo/
+*.jks
+*.p12
+*.key
+*.mobileprovision
