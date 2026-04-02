@@ -64,8 +64,6 @@ pnpm --filter @voltops/database db:down
 API:
 ```bash
 cd voltops/api
-python3 -m venv .venv
-source .venv/bin/activate
 pnpm --filter @voltops/api dev
 ```
 
