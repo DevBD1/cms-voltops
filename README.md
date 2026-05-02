@@ -6,6 +6,7 @@
 ## Rehberler
 - [Proje esasları ve isterler.](https://drive.google.com/file/d/1jcksmv4zyBqe_OCeBH6PIrWcMghsqQz0/view?usp=sharing)
 - [Veritabanı altyapısı nasıl kurulur?](https://docs.google.com/document/d/1c47XBCKIk8ppzKcUsIegOYBHHvTmLNGhnPMATkqBlZs/edit?usp=sharing)
+- [Google Stitch ile tasarım çalışması.](https://stitch.withgoogle.com/projects/17619469359769714980)
 
 ## Proje Özeti
 VoltOps, elektrikli araç şarj istasyonlarının temel operasyonlarını dijital ortamda yönetmek amacıyla tasarlanan ilişkisel veri tabanı odaklı bir projedir. Projenin temel amacı; kullanıcılar, çalışanlar, şarj istasyonları, istasyonlara bağlı soketler, şarj oturumları, fişler, bakım kayıtları ve destek talepleri gibi temel varlıkları tek bir sistem altında düzenli ve ilişkili bir şekilde modellemektir.
@@ -31,7 +32,7 @@ MVP düzeyinde stack böyledir:
 pnpm monorepo with:
 - `voltops/database`: PostgreSQL + TimescaleDB (Docker Compose)
 - `voltops/api`: Node.js Express
-- `voltops/web`: React (Vite)
+- `voltops/web-admin`: React (Vite)
 - `voltops/mobile`: React Native Expo
 
 ### Ön Gereklilikler
