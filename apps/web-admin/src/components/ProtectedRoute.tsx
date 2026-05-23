@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { getSession, isAuthenticated } from '../lib/auth';
+import { getSession } from '../lib/auth';
 import type { UserRole } from '../types/db.types';
 
 interface ProtectedRouteProps {
@@ -11,12 +11,14 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const location = useLocation();
   const session = getSession();
 
-  if (!isAuthenticated() || !session) {
+  if (!session) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(session.role)) {
-    const fallback = session.role === 'CUSTOMER' ? '/app' : '/dashboard';
+  const role = session.user.role;
+
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    const fallback = role === 'CUSTOMER' ? '/app' : '/dashboard';
     return <Navigate to={fallback} replace />;
   }
 

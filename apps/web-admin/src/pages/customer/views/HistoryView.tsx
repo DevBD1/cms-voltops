@@ -1,44 +1,45 @@
+import { useEffect, useState } from 'react';
+import { EmptyState } from '../../../components/customer/EmptyState';
 import { SessionStatusBadge } from '../../../components/customer/StatusBadge';
-import { getSessionHistory } from '../../../lib/customer-data';
+import { sessionsApi } from '../../../lib/api';
+import { formatCurrency, formatDateTime, formatKwh } from '../../../lib/formatters';
+import type { Session } from '../../../types/db.types';
 
-interface HistoryViewProps {
-  userId: string;
-}
+export function HistoryView() {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
 
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('tr-TR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount);
-}
-
-export function HistoryView({ userId }: HistoryViewProps) {
-  const sessions = getSessionHistory(userId);
+  useEffect(() => {
+    sessionsApi
+      .list()
+      .then((all) => setSessions(all.filter((s) => s.status !== 'ACTIVE')))
+      .catch(() => setSessions([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="space-y-6">
       <section>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Şarj geçmişi</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          Şarj geçmişi
+        </h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           Tamamlanan ve başarısız oturumlarınız
         </p>
       </section>
 
-      {sessions.length === 0 ? (
+      {loading ? (
+        <p className="text-sm text-slate-500">Yükleniyor…</p>
+      ) : sessions.length === 0 ? (
         <EmptyState message="Henüz tamamlanmış şarj oturumunuz yok." />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
               <tr>
-                <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">İstasyon</th>
+                <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
+                  İstasyon
+                </th>
                 <th className="hidden px-4 py-3 font-medium text-slate-600 sm:table-cell dark:text-slate-400">
                   Tarih
                 </th>
@@ -51,19 +52,23 @@ export function HistoryView({ userId }: HistoryViewProps) {
               {sessions.map((session) => (
                 <tr key={session.id}>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900 dark:text-white">{session.stationName}</p>
+                    <p className="font-medium text-slate-900 dark:text-white">
+                      {session.stationName}
+                    </p>
                     <p className="mt-0.5 font-mono text-xs text-slate-500 sm:hidden dark:text-slate-400">
-                      {formatDate(session.startTime)}
+                      {formatDateTime(session.startedAt)}
                     </p>
                   </td>
                   <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-400">
-                    {formatDate(session.startTime)}
+                    {formatDateTime(session.startedAt)}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-900 dark:text-white">
-                    {session.totalKwh.toFixed(1)}
+                    {formatKwh(session.energyKwh)}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-900 dark:text-white">
-                    {formatCurrency(session.totalAmount)}
+                    {session.totalPrice != null
+                      ? formatCurrency(parseFloat(session.totalPrice))
+                      : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <SessionStatusBadge status={session.status} />
@@ -74,14 +79,6 @@ export function HistoryView({ userId }: HistoryViewProps) {
           </table>
         </div>
       )}
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-[#111111]">
-      <p className="text-sm text-slate-600 dark:text-slate-400">{message}</p>
     </div>
   );
 }

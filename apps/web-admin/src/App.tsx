@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import AdminApp from './pages/admin/AdminApp';
 import CustomerApp from './pages/customer/CustomerApp';
-import Dashboard from './pages/Dashboard';
 import Landing from './pages/Landing';
 import LoginAdmin from './pages/LoginAdmin';
 import LoginCustomer from './pages/LoginCustomer';
@@ -25,7 +25,7 @@ export default function App() {
           path="/dashboard"
           element={
             <ProtectedRoute allowedRoles={['ADMIN', 'OPERATOR', 'TECHNICIAN']}>
-              <Dashboard />
+              <AdminApp />
             </ProtectedRoute>
           }
         />

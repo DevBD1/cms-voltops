@@ -10,7 +10,7 @@ alwaysApply: true
 - Accessibility: A modern, unobtrusive, but easily accessible settings/theme toggle must be present in the layout of every page.
 
 ## 2. Database Strictness & Logic Enforcement (Crucial)
-- Cursor as the Gatekeeper: Cursor MUST act as the absolute authority over data structures.
+- Cursor & Claude Code as gatekeepers: Both MUST act as the absolute authority over data structures on every task—shared responsibility, no split roles.
 - Schema Alignment: Every UI component, table, graph, or form MUST map directly to the established 5NF database schema (e.g., src/types/db.types.ts). 
-- Eradicate Hallucinations: If Google Stitch MCP generates a beautiful UI element for a data point or feature that DOES NOT exist in the database, Cursor MUST immediately delete it, adapt it, or flag it as a logical error. No fake data structures are allowed.
-- Feasibility: Cursor will actively audit all proposed UI interactions to ensure they are technically feasible with the current PostgreSQL/Drizzle backend architecture.
+- Eradicate Hallucinations: If generated UI includes a data point or feature that DOES NOT exist in the database, the active agent MUST immediately delete it, adapt it, or flag it as a logical error. No fake data structures are allowed.
+- Feasibility: Both agents actively audit UI interactions for technical feasibility with the current PostgreSQL/Drizzle backend architecture.

@@ -1,6 +1,6 @@
 # VoltOps schema quick reference
 
-Use with main-agent schema audits (after `/google-stitch`). Authoritative definitions: `apps/web-admin/src/types/db.types.ts` and `packages/database/ev_charge_network.sql`.
+Use with schema audits after any UI or API change (Cursor and Claude Code, shared). Authoritative definitions: `apps/web-admin/src/types/db.types.ts` and `packages/database/ev_charge_network.sql`.
 
 ## Entities and primary fields
 

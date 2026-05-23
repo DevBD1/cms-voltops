@@ -1,45 +1,51 @@
 ---
 name: agent-roles
 description: >-
-  Orchestrates VoltOps UI work: /google-stitch subagent for design, main Cursor
-  agent for schema enforcement. Use when auditing Stitch output, wiring UI to
-  data, or after @agent-roles / Ionity-style design tasks.
+  VoltOps is built by Cursor and Claude Code as equal partners. Both own design,
+  implementation, schema enforcement, API, and docs—always in parallel, on every
+  task. Use @agent-roles for Ionity-style UI, db.types.ts alignment, or workflow.
 ---
 
 # VoltOps Agent Roles
 
-**Design:** `/google-stitch` subagent (Stitch MCP). **Logic & orchestration:** main Cursor agent + project rules.
+**Cursor** and **Claude Code** are the only AI builders on this project. They share **all** work—no split ownership, no handoff-only phases.
 
-## Agent Roles
+## Shared responsibility (always, together)
 
-- Design Engine (Google Stitch MCP): You have creative flexibility to design modern, fluid, and visually striking layouts. Focus on typography, spacing, and the Ionity-inspired blue/white/black theme. Make the UI feel alive but professional.
-- Logic Enforcer (Cursor Core): You are the strict Backend/Data auditor. While Stitch designs, your skill is to ruthlessly check the data props. If Stitch creates `<p>{station.fakeMetric}</p>`, you must catch that `fakeMetric` is not in the DB schema and remove it. You prevent logical contradictions between the UI and the DB.
+On every task, both agents are equally responsible for:
 
-> **Logic Enforcer is the main agent**, not a subagent. Only `google-stitch` is defined under `.cursor/agents/`.
+- UI/UX (Ionity-inspired design, dark mode, anti-AI aesthetic per [DESIGN.md](../../../DESIGN.md))
+- Frontend implementation (`apps/web-admin`, React + Vite)
+- Backend & API (`apps/api`, Express, Drizzle)
+- Database alignment (`db.types.ts`, SQL, migrations)
+- Schema audits and removing hallucinated fields
+- Mocks, types, and feasibility checks against PostgreSQL/Drizzle
 
-## Orchestration
+There is no “design-only” or “logic-only” agent. Whichever tool is active must apply the full checklist below—not defer schema or API work to the other.
+
+## Workflow
 
 ```
-/google-stitch (design) → main agent schema audit → integrate
+any task → design + implement + schema-check (same pass, both tools)
 ```
 
-| Step | Who | Action |
-|------|-----|--------|
-| 1 | `/google-stitch` | Layout, theme, Stitch MCP, `apps/web-admin` UI files |
-| 2 | Main Cursor agent | Checklist below; fix or remove invalid props |
-| 3 | Main Cursor agent | Confirm API/DB feasibility; ship schema-aligned code |
+| Concern | Both agents |
+|---------|-------------|
+| Layout & theme | Yes |
+| Data-bound UI | Yes |
+| `db.types.ts` enforcement | Yes |
+| API/DB feasibility | Yes |
 
-Invoke design: `/google-stitch yeni istasyon listesi layout'u`.  
-Invoke audit: `@agent-roles` or ask the main agent to enforce `db.types.ts` after Stitch returns.
+Invoke: `@agent-roles` or reference this skill when starting UI, API, or schema work.
 
 ## When to apply
 
-| Trigger | Who |
-|---------|-----|
-| New page, layout, or component | `/google-stitch` then main agent |
-| Editing data-bound UI | Main agent (rules always on) |
-| Tables, forms, charts, KPI cards | Main agent before merge |
-| Ionity-style visual polish | `/google-stitch` |
+| Trigger | Action |
+|---------|--------|
+| New page, layout, or component | DESIGN.md + schema checklist in one pass |
+| Editing data-bound UI | Schema rules always on |
+| Tables, forms, charts, KPI cards | Verify against `db.types.ts` before done |
+| API or DB changes | Update types, SQL, and UI together |
 
 ## Sources of truth
 
@@ -49,7 +55,7 @@ Invoke audit: `@agent-roles` or ask the main agent to enforce `db.types.ts` afte
 
 Project UI rules: `.cursor/rules/VoltOps-System-UI-UX-Guidelines.mdc`
 
-## Schema audit checklist (main agent)
+## Schema audit checklist (every change)
 
 ```
 Schema audit:
@@ -61,7 +67,7 @@ Schema audit:
 - [ ] Mock data in mocks/ mirrors db.types.ts shapes exactly
 ```
 
-## Design Engine constraints
+## Design constraints (both agents)
 
 - Ionity palette and dark mode; theme toggle on every page.
 - Anti-AI aesthetic per DESIGN.md.
@@ -69,15 +75,15 @@ Schema audit:
 
 ## Violation examples
 
-| Stitch / UI | Verdict | Action |
-|-------------|---------|--------|
+| UI element | Verdict | Action |
+|------------|---------|--------|
 | `station.fakeMetric` | Hallucinated | Remove; use `Station` fields |
 | "Average session duration" card | Not in schema | Remove or schema gap |
 | `device.batteryLevel` | Not in `Device` | Remove |
 | Extra `SUPERADMIN` role | Enum mismatch | Use `UserRole` only |
 | "Monthly revenue" chart | No API | Do not chart until backend exists |
 
-## Reporting format (main agent)
+## Reporting format
 
 ```markdown
 ## Design retained

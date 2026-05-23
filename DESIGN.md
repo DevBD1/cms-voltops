@@ -1,6 +1,6 @@
 # VoltOps UI/UX Design System & Architecture
 
-This document defines the frontend design architecture, aesthetic rules, and development standards for the VoltOps Electric Vehicle Charging Network Management Panel (Web Admin). While the system is being developed with Cursor AI and Google Stitch MCP, these rules are strict and binding.
+This document defines the frontend design architecture, aesthetic rules, and development standards for the VoltOps Electric Vehicle Charging Network Management Panel (Web Admin). VoltOps is built by **Cursor** and **Claude Code** as equal partners; both apply these rules on every change. They are strict and binding.
 
 ## 1. Design Philosophy & Aesthetic Vision
 * **Inspiration:** The spacious, fluid, modern, and premium European EV network feel provided by the "https://www.ionity.eu/" interface.
@@ -36,13 +36,13 @@ Two distinct font families will be used hierarchically in the UI:
 
 ## 4. Strict DB Alignment & Logic Rules
 100% synchronization between the design and the database schema (Backend/PostgreSQL/Drizzle) is mandatory.
-* **Cursor as the Gatekeeper:** While the design agent (Stitch) has creative freedom for visualization, the coding agent (Cursor) will strictly enforce the database schema (`src/types/db.types.ts`).
-* **Zero Hallucinations:** Every table, chart, or metric in the UI must have a physical counterpart in the database. Designing or generating "fake" data fields that do not exist in the DB is strictly forbidden. Conflicting designs must be immediately corrected or deleted by Cursor.
+* **Cursor & Claude Code as gatekeepers:** UI may use creative freedom for visualization, but every implementation must strictly enforce the database schema (`src/types/db.types.ts`). Both tools enforce this on every pass—no handoff.
+* **Zero Hallucinations:** Every table, chart, or metric in the UI must have a physical counterpart in the database. Designing or generating "fake" data fields that do not exist in the DB is strictly forbidden. Conflicting designs must be immediately corrected or deleted.
 
 ## 5. Accessibility & Navigation
 * **Theme/Accessibility Toggle:** A modern toggle switch for light/dark mode and accessibility settings must be present in an easily accessible location (usually the Header/Top Bar) on every page.
 * **Layout:** Utilize grid structures that allow the interface to breathe (ample padding/margin) and do not overwhelm the user.
 
-## 6. Cursor agents
-* **Design:** `/google-stitch` subagent (`.cursor/agents/google-stitch.md`) — Google Stitch MCP, Ionity-style layouts in `apps/web-admin`.
-* **Schema & orchestration:** main Cursor agent + `@agent-roles` skill — enforces `db.types.ts` after Stitch; no separate logic subagent.
+## 6. Development workflow
+* **Builders:** Cursor and Claude Code — equal ownership of design, frontend, backend, and schema.
+* **Every change:** Ionity-style UI in `apps/web-admin` (per this document) **and** `db.types.ts` alignment in the same pass (`@agent-roles` skill).

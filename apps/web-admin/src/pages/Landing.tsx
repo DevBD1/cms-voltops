@@ -85,17 +85,28 @@ export default function Landing() {
 
       <section className="border-b border-slate-200 bg-[#FAFAFA] py-16 dark:border-slate-800 dark:bg-[#111111] md:py-24">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-10 md:grid-cols-3 md:gap-8">
-            {QUOTES.map((q) => (
-              <figure key={q.cite} className="relative border-l-4 border-brand-500 pl-6 dark:border-brand-400">
-                <blockquote className="text-2xl font-bold leading-snug tracking-tight text-ink sm:text-3xl dark:text-white">
-                  &ldquo;{q.text}&rdquo;
-                </blockquote>
-                <figcaption className="mt-4 text-base font-medium text-brand-600 dark:text-brand-400">
-                  — {q.cite}
-                </figcaption>
-              </figure>
-            ))}
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0A0A0A]">
+              <img
+                src="/driver-experience.png"
+                alt="VoltOps şarj istasyonunda mutlu bir sürücü, yanında elektrikli araç"
+                className="static aspect-[4/3] w-full object-cover object-center sm:aspect-[16/10]"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div className="grid gap-10 sm:gap-8">
+              {QUOTES.map((q) => (
+                <figure key={q.cite} className="relative border-l-4 border-brand-500 pl-6 dark:border-brand-400">
+                  <blockquote className="text-xl font-bold leading-snug tracking-tight text-ink sm:text-2xl dark:text-white">
+                    &ldquo;{q.text}&rdquo;
+                  </blockquote>
+                  <figcaption className="mt-3 text-base font-medium text-brand-600 dark:text-brand-400">
+                    — {q.cite}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
           </div>
         </div>
       </section>

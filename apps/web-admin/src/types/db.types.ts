@@ -1,96 +1,152 @@
-// src/types/db.types.ts
+// ─── Enum types (mirror database enums) ──────────────────────────────────────
 
 export type UserRole = 'ADMIN' | 'OPERATOR' | 'TECHNICIAN' | 'CUSTOMER';
-export type SocketType = 'AC_TYPE2' | 'DC_CCS2' | 'DC_CHADEMO';
-export type SocketStatus = 'AVAILABLE' | 'CHARGING' | 'FAULTY' | 'RESERVED';
-export type DeviceStatus = 'ONLINE' | 'OFFLINE' | 'MAINTENANCE';
 export type StationStatus = 'ACTIVE' | 'INACTIVE';
+export type PlugType = 'AC_TYPE2' | 'DC_CCS2' | 'DC_CHADEMO';
+export type CurrentType = 'AC' | 'DC';
+export type PlugStatus = 'AVAILABLE' | 'CHARGING' | 'FAULTY' | 'RESERVED';
 export type SessionStatus = 'ACTIVE' | 'COMPLETED' | 'FAILED';
+export type PaymentMethod = 'CREDIT_CARD' | 'WALLET';
 export type MaintenanceStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'CRITICAL';
+
+// Backward-compat aliases (used by StatusBadge.tsx)
+/** @deprecated Use PlugStatus */
+export type SocketStatus = PlugStatus;
+/** @deprecated Device table replaced by plug status */
+export type DeviceStatus = 'ONLINE' | 'OFFLINE' | 'MAINTENANCE';
+
+// ─── API response shapes ──────────────────────────────────────────────────────
+// These match exactly what the Express routes return.
 
 export interface User {
-  id: string;
+  id: number;
+  firstName: string;
+  lastName: string;
   email: string;
-  fullName: string;
+  phone: string | null;
   role: UserRole;
+  isActive: boolean;
   createdAt: string;
 }
 
-export interface Socket {
-  id: string;
-  deviceId: string;
-  socketNumber: number;
-  type: SocketType;
-  powerKw: number;
-  status: SocketStatus;
-  currentSessionId?: string;
-}
-
-export interface Device {
-  id: string;
-  stationId: string;
-  serialNumber: string;
-  model: string;
-  firmwareVersion: string;
-  status: DeviceStatus;
-  sockets: Socket[];
-}
-
+/** Station list item (from GET /api/stations) */
 export interface Station {
-  id: string;
+  id: number;
+  stationCode: string;
   name: string;
-  code: string;
-  status: StationStatus;
   city: string;
-  district: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  devices: Device[];
+  district: string | null;
+  address: string | null;
+  /** Returned as string from PostgreSQL numeric type */
+  latitude: string;
+  longitude: string;
+  status: StationStatus;
+  createdAt: string;
+  totalPlugs: number;
+  faultyPlugs: number;
+  availablePlugs: number;
 }
 
-export interface ChargingSession {
-  id: string;
-  socketId: string;
-  userId: string;
-  userFullName: string; // Kolaylık için ilişkili veriyi ekliyoruz
-  stationName: string;   // UI'da hızlı listelemek için
-  startTime: string;
-  endTime?: string;
-  totalKwh: number;
-  totalAmount: number;
+/** Station detail with embedded plugs (from GET /api/stations/:id) */
+export interface StationDetail extends Omit<Station, 'totalPlugs' | 'faultyPlugs' | 'availablePlugs'> {
+  plugs: Plug[];
+}
+
+/** Plug with station context (from GET /api/plugs) */
+export interface Plug {
+  id: number;
+  plugCode: string;
+  stationId: number;
+  stationName: string;
+  stationCode: string;
+  city: string;
+  plugType: PlugType;
+  /** Returned as string from PostgreSQL numeric type */
+  powerKw: string;
+  currentType: CurrentType;
+  status: PlugStatus;
+  updatedAt: string;
+}
+
+/** Charging session (from GET /api/sessions) */
+export interface Session {
+  id: number;
+  userId: number;
+  userFullName: string;
+  plugId: number;
+  plugCode: string;
+  plugType: PlugType;
+  stationName: string;
+  stationId: number;
+  startedAt: string;
+  endedAt: string | null;
+  /** Numeric as string */
+  energyKwh: string | null;
+  /** Numeric as string */
+  totalPrice: string | null;
   status: SessionStatus;
 }
 
-export interface Invoice {
-  id: string;
-  sessionId: string;
-  invoiceNumber: string;
-  amount: number;
-  tax: number;
+/** Receipt / invoice (from GET /api/receipts) */
+export interface Receipt {
+  id: number;
+  receiptNo: string;
+  sessionId: number;
+  stationName: string;
+  plugCode: string;
+  plugType: PlugType;
+  energyKwh: string | null;
+  subtotal: string;
+  taxAmount: string;
+  totalAmount: string;
+  currency: string;
+  paymentMethod: PaymentMethod;
   issuedAt: string;
-  paymentMethod: 'CREDIT_CARD' | 'WALLET';
 }
 
+/** Maintenance record (from GET /api/maintenance) */
 export interface MaintenanceRecord {
-  id: string;
-  deviceId: string;
-  deviceSerialNumber: string;
-  technicianName: string;
+  id: number;
+  stationId: number;
+  stationName: string | null;
+  plugId: number | null;
+  plugCode: string | null;
+  assignedEmployeeId: number | null;
+  technicianName: string | null;
+  maintenanceType: string | null;
   description: string;
+  scheduledDate: string | null;
+  completedDate: string | null;
   status: MaintenanceStatus;
   createdAt: string;
-  resolvedAt?: string;
+  updatedAt: string;
 }
 
-export interface SupportTicket {
-  id: string;
-  userId: string;
+/** Support ticket (from GET /api/tickets) */
+export interface Ticket {
+  id: number;
+  userId: number;
   userFullName: string;
-  subject: string;
+  stationId: number | null;
+  stationName: string | null;
+  title: string;
   description: string;
+  priority: TicketPriority;
   status: TicketStatus;
-  priority: 'LOW' | 'MEDIUM' | 'CRITICAL';
   createdAt: string;
+  updatedAt: string;
+}
+
+/** Stored in localStorage after successful login */
+export interface AuthSession {
+  token: string;
+  user: {
+    id: number;
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: UserRole;
+  };
 }

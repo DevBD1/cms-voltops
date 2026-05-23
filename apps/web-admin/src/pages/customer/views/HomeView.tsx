@@ -1,32 +1,40 @@
+import { useEffect, useState } from 'react';
 import { SessionStatusBadge } from '../../../components/customer/StatusBadge';
-import { getActiveSession, getSessionHistory } from '../../../lib/customer-data';
+import { sessionsApi } from '../../../lib/api';
+import { formatCurrency, formatKwh, formatShortDateTime } from '../../../lib/formatters';
+import type { Session } from '../../../types/db.types';
 
 interface HomeViewProps {
-  userId: string;
   onNavigate: (tab: 'history' | 'stations') => void;
 }
 
-function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat('tr-TR', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
+export function HomeView({ onNavigate }: HomeViewProps) {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(amount);
-}
+  useEffect(() => {
+    sessionsApi
+      .list()
+      .then(setSessions)
+      .catch(() => setSessions([]))
+      .finally(() => setLoading(false));
+  }, []);
 
-export function HomeView({ userId, onNavigate }: HomeViewProps) {
-  const activeSession = getActiveSession(userId);
-  const recentCompleted = getSessionHistory(userId).slice(0, 2);
+  const activeSession = sessions.find((s) => s.status === 'ACTIVE');
+  const recentCompleted = sessions
+    .filter((s) => s.status !== 'ACTIVE')
+    .slice(0, 2);
+
+  if (loading) {
+    return <p className="text-sm text-slate-500">Yükleniyor…</p>;
+  }
 
   return (
     <div className="space-y-8">
       <section>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Şarj özeti</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          Şarj özeti
+        </h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           Aktif oturumunuz ve son işlemleriniz
         </p>
@@ -41,29 +49,38 @@ export function HomeView({ userId, onNavigate }: HomeViewProps) {
               </p>
               <SessionStatusBadge status={activeSession.status} />
             </div>
-            <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">{activeSession.stationName}</h2>
+            <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
+              {activeSession.stationName}
+            </h2>
+            <p className="mt-0.5 font-mono text-xs text-slate-500 dark:text-slate-400">
+              {activeSession.plugCode}
+            </p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Başlangıç: {formatDate(activeSession.startTime)}
+              Başlangıç: {formatShortDateTime(activeSession.startedAt)}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-px bg-amber-200/60 dark:bg-amber-900/40">
-            <div className="bg-white px-6 py-4 dark:bg-[#111111]">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Enerji</p>
-              <p className="mt-1 font-mono text-xl font-semibold text-slate-900 dark:text-white">
-                {activeSession.totalKwh.toFixed(1)} <span className="text-sm font-normal text-slate-500">kWh</span>
-              </p>
+          {activeSession.energyKwh != null && activeSession.totalPrice != null && (
+            <div className="grid grid-cols-2 gap-px bg-amber-200/60 dark:bg-amber-900/40">
+              <div className="bg-white px-6 py-4 dark:bg-[#111111]">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Enerji</p>
+                <p className="mt-1 font-mono text-xl font-semibold text-slate-900 dark:text-white">
+                  {formatKwh(activeSession.energyKwh)}
+                </p>
+              </div>
+              <div className="bg-white px-6 py-4 dark:bg-[#111111]">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Tahmini Tutar</p>
+                <p className="mt-1 font-mono text-xl font-semibold text-slate-900 dark:text-white">
+                  {formatCurrency(parseFloat(activeSession.totalPrice))}
+                </p>
+              </div>
             </div>
-            <div className="bg-white px-6 py-4 dark:bg-[#111111]">
-              <p className="text-xs text-slate-500 dark:text-slate-400">Tutar</p>
-              <p className="mt-1 font-mono text-xl font-semibold text-slate-900 dark:text-white">
-                {formatCurrency(activeSession.totalAmount)}
-              </p>
-            </div>
-          </div>
+          )}
         </article>
       ) : (
         <article className="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-[#111111]">
-          <p className="text-sm text-slate-600 dark:text-slate-400">Şu an aktif şarj oturumunuz yok.</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Şu an aktif şarj oturumunuz yok.
+          </p>
           <button
             type="button"
             onClick={() => onNavigate('stations')}
@@ -95,12 +112,16 @@ export function HomeView({ userId, onNavigate }: HomeViewProps) {
                 className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#111111]"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-slate-900 dark:text-white">{session.stationName}</p>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{formatDate(session.startTime)}</p>
+                  <p className="truncate font-medium text-slate-900 dark:text-white">
+                    {session.stationName}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    {formatShortDateTime(session.startedAt)}
+                  </p>
                 </div>
                 <div className="ml-4 shrink-0 text-right">
                   <p className="font-mono text-sm font-medium text-slate-900 dark:text-white">
-                    {session.totalKwh.toFixed(1)} kWh
+                    {formatKwh(session.energyKwh)}
                   </p>
                   <SessionStatusBadge status={session.status} />
                 </div>

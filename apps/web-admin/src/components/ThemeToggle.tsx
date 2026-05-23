@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { applyTheme, getStoredTheme, THEME_CHANGE_EVENT, type Theme } from '../lib/theme';
 
-export function ThemeToggle({ className = '' }: { className?: string }) {
+const SIZE_CLASSES = {
+  sm: 'px-3 py-2 text-sm',
+  md: 'px-4 py-2.5 text-base',
+} as const;
+
+export function ThemeToggle({
+  className = '',
+  size = 'md',
+}: {
+  className?: string;
+  size?: 'sm' | 'md';
+}) {
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
 
   useEffect(() => {
@@ -15,8 +26,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
 
   const toggle = () => {
     const next: Theme = theme === 'light' ? 'dark' : 'light';
-    applyTheme(next);
-    setTheme(next);
+    applyTheme(next); // dispatches THEME_CHANGE_EVENT → useEffect listener calls setTheme
   };
 
   return (
@@ -25,7 +35,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
       onClick={toggle}
       aria-label={theme === 'light' ? 'Karanlık moda geç' : 'Aydınlık moda geç'}
       aria-pressed={theme === 'dark'}
-      className={`inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-base font-semibold text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800 ${className}`}
+      className={`inline-flex items-center gap-2.5 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-500 dark:hover:bg-slate-800 ${SIZE_CLASSES[size]} ${className}`}
     >
       {theme === 'light' ? (
         <>

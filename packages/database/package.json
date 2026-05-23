@@ -13,16 +13,20 @@
     "build": "echo \"Database image is managed by Docker Compose\"",
     "lint": "docker compose config -q",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "drizzle-orm": "latest",
     "postgres": "latest"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "latest",
     "dotenv": "latest",
     "drizzle-kit": "latest",
+    "tsx": "^4.21.0",
     "typescript": "latest"
   }
 }

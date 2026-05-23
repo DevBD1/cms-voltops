@@ -1,7 +1,8 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout/PublicLayout';
-import { resolveRedirect, setSessionFromEmail } from '../lib/auth';
+import { login, resolveRedirect } from '../lib/auth';
+import { ApiError } from '../lib/api';
 import type { UserRole } from '../types/db.types';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,6 +24,7 @@ export default function Login({ mode }: LoginProps) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
 
   const validate = (): boolean => {
@@ -45,35 +47,38 @@ export default function Login({ mode }: LoginProps) {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
-    const trimmedEmail = email.trim();
-    const session = setSessionFromEmail(trimmedEmail);
-    if (!session) {
-      setErrors({
-        form: isAdmin
-          ? 'Kayıtlı yönetim hesabı bulunamadı. Demo: mehmet.demir@voltops.com'
-          : 'Kayıtlı müşteri hesabı bulunamadı. Demo: ahmet.yilmaz@mail.com',
-      });
-      return;
+    setLoading(true);
+    setErrors({});
+
+    try {
+      const session = await login(email.trim(), password);
+      const roleOk = isAdmin
+        ? ADMIN_ROLES.includes(session.user.role)
+        : session.user.role === 'CUSTOMER';
+
+      if (!roleOk) {
+        setErrors({
+          form: isAdmin
+            ? 'Bu hesap yönetim paneline erişemez. Müşteri girişini kullanın.'
+            : 'Bu hesap müşteri alanına erişemez. Yönetim girişini kullanın.',
+        });
+        return;
+      }
+
+      navigate(resolveRedirect(session.user.role, from), { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrors({ form: err.message });
+      } else {
+        setErrors({ form: 'Sunucuya bağlanılamadı. Lütfen tekrar deneyin.' });
+      }
+    } finally {
+      setLoading(false);
     }
-
-    const roleOk = isAdmin
-      ? ADMIN_ROLES.includes(session.role)
-      : session.role === 'CUSTOMER';
-
-    if (!roleOk) {
-      setErrors({
-        form: isAdmin
-          ? 'Bu hesap yönetim paneline erişemez. Müşteri girişini kullanın.'
-          : 'Bu hesap müşteri alanına erişemez. Yönetim girişini kullanın.',
-      });
-      return;
-    }
-
-    navigate(resolveRedirect(session.role, from), { replace: true });
   };
 
   return (
@@ -83,7 +88,9 @@ export default function Login({ mode }: LoginProps) {
           <p className="text-sm font-semibold uppercase tracking-widest text-brand-600 dark:text-brand-400">
             {isAdmin ? 'Yönetim girişi' : 'Kullanıcı girişi'}
           </p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink dark:text-white">Giriş Yap</h1>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink dark:text-white">
+            Giriş Yap
+          </h1>
           <p className="mt-3 text-base text-slate-600 dark:text-slate-400">
             {isAdmin
               ? 'Operasyon paneline erişmek için yönetim hesabınızla giriş yapın.'
@@ -98,7 +105,10 @@ export default function Login({ mode }: LoginProps) {
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
             <div>
-              <label htmlFor="email" className="block text-base font-medium text-slate-700 dark:text-slate-300">
+              <label
+                htmlFor="email"
+                className="block text-base font-medium text-slate-700 dark:text-slate-300"
+              >
                 E-posta
               </label>
               <input
@@ -116,13 +126,18 @@ export default function Login({ mode }: LoginProps) {
                     ? 'border-red-500 dark:border-red-500'
                     : 'border-slate-200 dark:border-slate-700'
                 }`}
-                placeholder={isAdmin ? 'mehmet.demir@voltops.com' : 'ahmet.yilmaz@mail.com'}
+                placeholder={isAdmin ? 'admin@voltops.com' : 'ahmet@example.com'}
               />
-              {errors.email && <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{errors.email}</p>}
+              {errors.email && (
+                <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
+              )}
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-base font-medium text-slate-700 dark:text-slate-300">
+              <label
+                htmlFor="password"
+                className="block text-base font-medium text-slate-700 dark:text-slate-300"
+              >
                 Şifre
               </label>
               <input
@@ -149,13 +164,14 @@ export default function Login({ mode }: LoginProps) {
 
             <button
               type="submit"
-              className={`w-full rounded-lg py-4 text-base font-semibold text-white transition-colors sm:text-lg ${
+              disabled={loading}
+              className={`w-full rounded-lg py-4 text-base font-semibold text-white transition-colors disabled:opacity-60 sm:text-lg ${
                 isAdmin
                   ? 'bg-slate-800 hover:bg-amber-400 hover:text-slate-900 dark:bg-slate-700 dark:hover:bg-amber-400'
                   : 'bg-brand-600 hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600'
               }`}
             >
-              Giriş Yap
+              {loading ? 'Giriş yapılıyor…' : 'Giriş Yap'}
             </button>
           </form>
 
@@ -163,7 +179,10 @@ export default function Login({ mode }: LoginProps) {
             {isAdmin ? (
               <>
                 Müşteri misiniz?{' '}
-                <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                <Link
+                  to="/login"
+                  className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                >
                   Kullanıcı girişi
                 </Link>
               </>

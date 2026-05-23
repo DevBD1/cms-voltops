@@ -1,8 +1,11 @@
 import type {
+  DeviceStatus,
+  MaintenanceStatus,
   SessionStatus,
   SocketStatus,
   StationStatus,
   TicketStatus,
+  UserRole,
 } from '../../types/db.types';
 
 type BadgeVariant = 'success' | 'warning' | 'danger' | 'neutral';
@@ -63,5 +66,50 @@ export function StationStatusBadge({ status }: { status: StationStatus }) {
 
 export function TicketStatusBadge({ status }: { status: TicketStatus }) {
   const { label, variant } = TICKET_LABELS[status];
+  return <Badge label={label} variant={variant} />;
+}
+
+const DEVICE_LABELS: Record<DeviceStatus, { label: string; variant: BadgeVariant }> = {
+  ONLINE: { label: 'Çevrimiçi', variant: 'success' },
+  OFFLINE: { label: 'Çevrimdışı', variant: 'danger' },
+  MAINTENANCE: { label: 'Bakımda', variant: 'warning' },
+};
+
+const MAINTENANCE_LABELS: Record<MaintenanceStatus, { label: string; variant: BadgeVariant }> = {
+  OPEN: { label: 'Açık', variant: 'warning' },
+  IN_PROGRESS: { label: 'Devam ediyor', variant: 'warning' },
+  RESOLVED: { label: 'Çözüldü', variant: 'success' },
+};
+
+const ROLE_LABELS: Record<UserRole, { label: string; variant: BadgeVariant }> = {
+  ADMIN: { label: 'Yönetici', variant: 'neutral' },
+  OPERATOR: { label: 'Operatör', variant: 'neutral' },
+  TECHNICIAN: { label: 'Teknisyen', variant: 'neutral' },
+  CUSTOMER: { label: 'Müşteri', variant: 'neutral' },
+};
+
+const PRIORITY_LABELS: Record<'LOW' | 'MEDIUM' | 'CRITICAL', { label: string; variant: BadgeVariant }> = {
+  LOW: { label: 'Düşük', variant: 'neutral' },
+  MEDIUM: { label: 'Orta', variant: 'warning' },
+  CRITICAL: { label: 'Kritik', variant: 'danger' },
+};
+
+export function DeviceStatusBadge({ status }: { status: DeviceStatus }) {
+  const { label, variant } = DEVICE_LABELS[status];
+  return <Badge label={label} variant={variant} />;
+}
+
+export function MaintenanceStatusBadge({ status }: { status: MaintenanceStatus }) {
+  const { label, variant } = MAINTENANCE_LABELS[status];
+  return <Badge label={label} variant={variant} />;
+}
+
+export function UserRoleBadge({ role }: { role: UserRole }) {
+  const { label, variant } = ROLE_LABELS[role];
+  return <Badge label={label} variant={variant} />;
+}
+
+export function TicketPriorityBadge({ priority }: { priority: 'LOW' | 'MEDIUM' | 'CRITICAL' }) {
+  const { label, variant } = PRIORITY_LABELS[priority];
   return <Badge label={label} variant={variant} />;
 }

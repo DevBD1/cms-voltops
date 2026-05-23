@@ -1,14 +1,11 @@
-import { MOCK_USERS } from '../mocks/db.mocks';
-import type { UserRole } from '../types/db.types';
+import type { AuthSession, UserRole } from '../types/db.types';
+import { authApi } from './api';
 
 const AUTH_KEY = 'voltops_auth';
 
-export interface AuthSession {
-  email: string;
-  userId: string;
-  role: UserRole;
-}
+export type { AuthSession };
 
+/** Read the current session from localStorage. */
 export function getSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
@@ -19,14 +16,22 @@ export function getSession(): AuthSession | null {
   }
 }
 
-export function setSessionFromEmail(email: string): AuthSession | null {
-  const user = MOCK_USERS.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-  if (!user) return null;
-
+/**
+ * Authenticate with the real API.
+ * Stores the returned token + user in localStorage.
+ * Throws ApiError on invalid credentials.
+ */
+export async function login(email: string, password: string): Promise<AuthSession> {
+  const data = await authApi.login(email, password);
   const session: AuthSession = {
-    email: user.email,
-    userId: user.id,
-    role: user.role,
+    token: data.token,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      firstName: data.user.firstName,
+      lastName: data.user.lastName,
+      role: data.user.role as UserRole,
+    },
   };
   localStorage.setItem(AUTH_KEY, JSON.stringify(session));
   return session;
@@ -46,7 +51,7 @@ export function getPostLoginPath(role: UserRole): string {
 
 export function resolveRedirect(role: UserRole, from?: string): string {
   const home = getPostLoginPath(role);
-  if (!from || from === '/login') return home;
+  if (!from || from === '/login' || from === '/login/admin') return home;
   if (role === 'CUSTOMER' && from.startsWith('/app')) return from;
   if (role !== 'CUSTOMER' && from.startsWith('/dashboard')) return from;
   return home;

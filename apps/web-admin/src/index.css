@@ -30,7 +30,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     color-scheme: light;
-    scroll-behavior: smooth;
   }
 
   @media (prefers-reduced-motion: no-preference) {
