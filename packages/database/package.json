@@ -20,6 +20,8 @@
     "postgres": "latest"
   },
   "devDependencies": {
+    "@types/node": "latest",
+    "dotenv": "latest",
     "drizzle-kit": "latest",
     "typescript": "latest"
   }

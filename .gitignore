@@ -4,6 +4,11 @@ node_modules/
 .DS_Store
 */.DS_Store
 Thumbs.db
+apps/.env
+.cursor/mcp.json
+.cursor/mcp.json.local
+.json
+mcp.json
 
 # Environment & Logs
 .env*

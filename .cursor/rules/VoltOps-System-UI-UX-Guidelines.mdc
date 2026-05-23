@@ -1,0 +1,16 @@
+---
+alwaysApply: true
+---
+
+## 1. Design Language & Aesthetics
+- Inspiration: Strictly follow the modern, fluid, and premium aesthetic of "https://www.ionity.eu/".
+- Anti-AI Aesthetic: Avoid generic "AI-generated" looks (e.g., excessive glassmorphism, messy box-shadows, overly rounded cartoonish corners). The UI must look like it was hand-crafted by a Senior Frontend Engineer.
+- Light Mode (Default): Clean white background (#FFFFFF or #FAFAFA), deep black/dark slate text for maximum readability, and vibrant brand Blue for primary actions/accents.
+- Dark Mode: Mandatory on all pages. Use deep blue/black backgrounds, crisp white text, and vivid Blue accents.
+- Accessibility: A modern, unobtrusive, but easily accessible settings/theme toggle must be present in the layout of every page.
+
+## 2. Database Strictness & Logic Enforcement (Crucial)
+- Cursor as the Gatekeeper: Cursor MUST act as the absolute authority over data structures.
+- Schema Alignment: Every UI component, table, graph, or form MUST map directly to the established 5NF database schema (e.g., src/types/db.types.ts). 
+- Eradicate Hallucinations: If Google Stitch MCP generates a beautiful UI element for a data point or feature that DOES NOT exist in the database, Cursor MUST immediately delete it, adapt it, or flag it as a logical error. No fake data structures are allowed.
+- Feasibility: Cursor will actively audit all proposed UI interactions to ensure they are technically feasible with the current PostgreSQL/Drizzle backend architecture.

@@ -13,8 +13,13 @@ const port = process.env.PORT || 3000;
 const appService = new AppService();
 
 // 2. SORUNUN ÇÖZÜMÜ: Veritabanı bağlantısını kuruyoruz
-// .env dosyanızda DATABASE_URL tanımlı olmalı
-const queryClient = postgres(process.env.DATABASE_URL as string);
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error('DATABASE_URL ortam değişkeni tanımlı değil. Lütfen .env dosyanızı kontrol edin.');
+  process.exit(1);
+}
+
+const queryClient = postgres(databaseUrl);
 const db = drizzle(queryClient);
 
 app.use(express.json());
