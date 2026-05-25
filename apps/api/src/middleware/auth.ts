@@ -37,6 +37,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     next();
   } catch {
     res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token.' });
+    return;
   }
 }
 

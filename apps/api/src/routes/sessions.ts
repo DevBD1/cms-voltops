@@ -123,6 +123,16 @@ router.patch('/:id/end', requireAuth, async (req, res) => {
     return;
   }
 
+  if (
+    typeof energyKwh !== 'number' ||
+    typeof totalPrice !== 'number' ||
+    !Number.isFinite(energyKwh) ||
+    !Number.isFinite(totalPrice)
+  ) {
+    res.status(400).json({ error: 'energyKwh ve totalPrice geçerli sayılar olmalıdır.' });
+    return;
+  }
+
   try {
     const [session] = await db
       .select()
@@ -151,8 +161,8 @@ router.patch('/:id/end', requireAuth, async (req, res) => {
         .update(sessions)
         .set({
           endedAt: new Date(),
-          energyKwh: String(energyKwh),
-          totalPrice: String(totalPrice),
+          energyKwh: energyKwh.toFixed(3),
+          totalPrice: totalPrice.toFixed(2),
           status: 'COMPLETED',
           updatedAt: new Date(),
         })
