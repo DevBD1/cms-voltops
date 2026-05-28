@@ -1,14 +1,19 @@
 {
-  "name": "@voltops/db",
+  "name": "@voltops/database",
   "private": true,
   "version": "0.1.0",
   "scripts": {
     "dev": "pnpm db:up",
-    "db:up": "docker compose up -d",
+    "compose:up": "docker compose up -d",
+    "compose:down": "docker compose down",
+    "compose:logs": "docker compose logs -f",
+    "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f db",
+    "api:up": "docker compose up -d api",
+    "api:logs": "docker compose logs -f api",
     "start": "pnpm db:up",
-    "build": "echo \"Database image is managed by Docker Compose\"",
+    "build": "echo \"Database and API images are managed by Docker Compose\"",
     "lint": "docker compose config -q"
   }
 }
