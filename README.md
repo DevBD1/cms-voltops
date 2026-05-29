@@ -55,7 +55,17 @@ pnpm dev
 
 #### Run individual services
 
-Database:
+Docker Compose from repo root:
+```bash
+pnpm db:up
+pnpm db:logs
+pnpm api:up
+pnpm compose:up
+pnpm compose:logs
+pnpm compose:down
+```
+
+Database package compatibility commands:
 ```bash
 pnpm --filter @voltops/database db:up
 pnpm --filter @voltops/database db:logs
