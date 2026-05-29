@@ -60,16 +60,23 @@ Docker Compose from repo root:
 pnpm db:up
 pnpm db:logs
 pnpm api:up
+pnpm pgadmin:up
 pnpm compose:up
 pnpm compose:logs
 pnpm compose:down
 ```
+
+pgAdmin:
+- URL: `http://localhost:5050`
+- Email: `admin@voltops.local`
+- Password: `voltops`
 
 Database package compatibility commands:
 ```bash
 pnpm --filter @voltops/database db:up
 pnpm --filter @voltops/database db:logs
 pnpm --filter @voltops/database db:down
+pnpm --filter @voltops/database pgadmin:up
 ```
 
 API:
