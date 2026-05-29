@@ -1,0 +1,50 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: voltops-timescale
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-voltops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voltops}
+      POSTGRES_DB: ${POSTGRES_DB:-voltops}
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voltops}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: voltops-api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-voltops}:${POSTGRES_PASSWORD:-voltops}@db:5432/${POSTGRES_DB:-voltops}
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: voltops-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@voltops.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-voltops}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  timescale_data:
+  pgadmin_data:

@@ -1,14 +1,21 @@
 {
-  "name": "@voltops/db",
+  "name": "@voltops/database",
   "private": true,
   "version": "0.1.0",
   "scripts": {
     "dev": "pnpm db:up",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f db",
+    "compose:up": "docker compose -f ../../docker-compose.yml up -d",
+    "compose:down": "docker compose -f ../../docker-compose.yml down",
+    "compose:logs": "docker compose -f ../../docker-compose.yml logs -f",
+    "db:up": "docker compose -f ../../docker-compose.yml up -d db",
+    "db:down": "docker compose -f ../../docker-compose.yml down",
+    "db:logs": "docker compose -f ../../docker-compose.yml logs -f db",
+    "api:up": "docker compose -f ../../docker-compose.yml up -d api",
+    "api:logs": "docker compose -f ../../docker-compose.yml logs -f api",
+    "pgadmin:up": "docker compose -f ../../docker-compose.yml up -d pgadmin",
+    "pgadmin:logs": "docker compose -f ../../docker-compose.yml logs -f pgadmin",
     "start": "pnpm db:up",
-    "build": "echo \"Database image is managed by Docker Compose\"",
-    "lint": "docker compose config -q"
+    "build": "echo \"Database and API images are managed by Docker Compose\"",
+    "lint": "docker compose -f ../../docker-compose.yml config -q"
   }
 }
