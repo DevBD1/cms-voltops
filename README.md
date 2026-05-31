@@ -6,7 +6,8 @@
 ## Rehberler
 - [Proje esasları ve isterler.](https://drive.google.com/file/d/1jcksmv4zyBqe_OCeBH6PIrWcMghsqQz0/view?usp=sharing)
 - [Veritabanı altyapısı nasıl kurulur?](https://docs.google.com/document/d/1c47XBCKIk8ppzKcUsIegOYBHHvTmLNGhnPMATkqBlZs/edit?usp=sharing)
-- [Google Stitch ile tasarım çalışması.](https://stitch.withgoogle.com/projects/17619469359769714980)
+- [Google Stitch ile web-admin (CMS) tasarım çalışması.](https://stitch.withgoogle.com/projects/17619469359769714980)
+- [Google Stitch ile mobil uygulama tasarım çalışması.](https://stitch.withgoogle.com/projects/559835388226318948)
 
 ## Proje Özeti
 VoltOps, elektrikli araç şarj istasyonlarının temel operasyonlarını dijital ortamda yönetmek amacıyla tasarlanan ilişkisel veri tabanı odaklı bir projedir. Projenin temel amacı; kullanıcılar, çalışanlar, şarj istasyonları, istasyonlara bağlı soketler, şarj oturumları, fişler, bakım kayıtları ve destek talepleri gibi temel varlıkları tek bir sistem altında düzenli ve ilişkili bir şekilde modellemektir.
@@ -19,18 +20,18 @@ Sonuç olarak VoltOps, elektrikli araç şarj istasyonu yönetimi senaryosu üze
 
 ## Geliştirme Ortamı
 MVP düzeyinde stack böyledir:
-- PostgreSQL: ana DB
+- Supabase Postgres: canonical ana DB
 - Node.js Express: API
 - Drizzle: ORM, config and SQL migrations
-- pgAdmin: veritabanı için GUI aracı
+- Supabase Dashboard: veritabanı için GUI/admin aracı
 - Redis: cache / rate limit / queue yarvis
 - Nginx: reverse proxy
-- Docker Compose: lokal orkestrasyon
+- Docker Compose: API container orkestrasyonu
 - Dozzle: log görüntüleme
 
 ## Projenin Yüklenmesi ve Çalıştırılması
 pnpm monorepo with:
-- `voltops/database`: PostgreSQL + TimescaleDB (Docker Compose)
+- `voltops/database`: Supabase Postgres migration and Compose helpers
 - `voltops/api`: Node.js Express
 - `voltops/web-admin`: React (Vite)
 - `voltops/mobile`: React Native Expo
@@ -39,6 +40,9 @@ pnpm monorepo with:
 - Node.js 20+
 - pnpm 9+
 - Docker + Docker Compose
+- Supabase `DATABASE_URL`
+- Supabase `SUPABASE_URL`
+- Supabase `SUPABASE_PUBLISHABLE_KEY`
 
 ### Install
 
@@ -57,32 +61,44 @@ pnpm dev
 
 Docker Compose from repo root:
 ```bash
-pnpm db:up
-pnpm db:logs
 pnpm api:up
-pnpm pgadmin:up
 pnpm compose:up
 pnpm compose:logs
 pnpm compose:down
 ```
 
-pgAdmin:
-- URL: `http://localhost:5050`
-- Email: `admin@voltops.local`
-- Password: `voltops`
+Supabase Dashboard replaces local pgAdmin. Supabase Postgres replaces local Docker Postgres.
 
-Database package compatibility commands:
+Copy the environment examples before running local services:
+
 ```bash
-pnpm --filter @voltops/database db:up
-pnpm --filter @voltops/database db:logs
-pnpm --filter @voltops/database db:down
-pnpm --filter @voltops/database pgadmin:up
+cp .env.example .env
+cp apps/mobile/.env.example apps/mobile/.env
 ```
+
+Mobile and admin clients must not read or write business tables through Supabase directly. They use Supabase only for auth/session tokens, then call the Express API for stations, sessions, tickets, profiles, and vehicles.
 
 API:
 ```bash
-cd voltops/api
+export DATABASE_URL='postgresql://postgres:<DB_PASSWORD>@db.yplkmowedhdcclxdgtst.supabase.co:5432/postgres?sslmode=require'
+export SUPABASE_URL='https://yplkmowedhdcclxdgtst.supabase.co'
+export SUPABASE_PUBLISHABLE_KEY='sb_publishable_NzbjbbxVud_ZZmHcpP0XBw_Pw-vgUIc'
 pnpm --filter @voltops/api dev
+```
+
+Database migrations:
+```bash
+pnpm --filter @voltops/api db:generate
+pnpm --filter @voltops/api db:setup
+```
+
+API with Docker Compose:
+```bash
+export DATABASE_URL='postgresql://postgres:<DB_PASSWORD>@db.yplkmowedhdcclxdgtst.supabase.co:5432/postgres?sslmode=require'
+export SUPABASE_URL='https://yplkmowedhdcclxdgtst.supabase.co'
+export SUPABASE_PUBLISHABLE_KEY='sb_publishable_NzbjbbxVud_ZZmHcpP0XBw_Pw-vgUIc'
+pnpm api:up
+pnpm api:logs
 ```
 
 Web:
