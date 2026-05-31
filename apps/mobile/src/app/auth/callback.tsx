@@ -8,9 +8,19 @@ import { supabase } from "@/lib/supabase";
 type CallbackState = "loading" | "error";
 
 function getUrlParams(url: string): URLSearchParams {
-  const [, fragment = ""] = url.split("#");
-  const query = url.includes("?") ? url.split("?")[1]?.split("#")[0] ?? "" : "";
-  return new URLSearchParams(fragment || query);
+  const params = new URLSearchParams();
+  const [left, fragment] = url.split("#");
+  const query = left.includes("?") ? left.split("?")[1] : "";
+
+  if (query) {
+    new URLSearchParams(query).forEach((value, key) => params.set(key, value));
+  }
+
+  if (fragment) {
+    new URLSearchParams(fragment).forEach((value, key) => params.set(key, value));
+  }
+
+  return params;
 }
 
 async function createSessionFromUrl(url: string): Promise<void> {

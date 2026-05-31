@@ -26,6 +26,15 @@ app.use((_req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
+
 app.get('/', (req: Request, res: Response) => {
   res.json(appService.getHealth());
 });
@@ -35,7 +44,7 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/mobile', createMobileRouter(authService, catalogService, sessionService, ticketService));
-app.use('/api/admin', createAdminRouter(catalogService, sessionService, ticketService));
+app.use('/api/admin', createAdminRouter(authService, catalogService, sessionService, ticketService));
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found' });

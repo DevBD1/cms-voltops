@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { plugs, stations } from '../db/schema';
 import { HttpError } from '../utils/http';
@@ -29,8 +29,9 @@ function distanceKm(fromLatitude: number, fromLongitude: number, toLatitude: num
   const halfChord =
     Math.sin(latitudeDelta / 2) ** 2 +
     Math.cos(fromLatitudeRad) * Math.cos(toLatitudeRad) * Math.sin(longitudeDelta / 2) ** 2;
+  const clampedHalfChord = Math.min(1, Math.max(0, halfChord));
 
-  return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(halfChord), Math.sqrt(1 - halfChord)) * 100) / 100;
+  return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(clampedHalfChord), Math.sqrt(1 - clampedHalfChord)) * 100) / 100;
 }
 
 export class CatalogService {
@@ -63,13 +64,23 @@ export class CatalogService {
   }
 
   async listPlugs(filters?: { stationCode?: string; status?: string }): Promise<PlugDetails[]> {
-    const plugRows = await db.select().from(plugs);
-    const stationRows = await db.select().from(stations);
+    const conditions: SQL[] = [];
 
-    return plugRows
-      .filter((plug) => (filters?.stationCode ? plug.stationCode === filters.stationCode : true))
-      .filter((plug) => (filters?.status ? plug.status === filters.status : true))
-      .map((plug) => this.toPlugDetails(plug, stationRows));
+    if (filters?.stationCode) {
+      conditions.push(eq(plugs.stationCode, filters.stationCode));
+    }
+
+    if (filters?.status) {
+      conditions.push(eq(plugs.status, filters.status));
+    }
+
+    const query = db.select().from(plugs).innerJoin(stations, eq(plugs.stationCode, stations.stationCode));
+    const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+
+    return rows.map((row) => ({
+      ...row.plugs,
+      station: row.stations,
+    }));
   }
 
   async setStationStatus(stationCode: string, status: StationStatus): Promise<StationSummary> {
