@@ -1,0 +1,1 @@
+ALTER TABLE "users" ALTER COLUMN "tckn" SET DATA TYPE varchar(11);

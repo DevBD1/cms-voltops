@@ -1,21 +1,16 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import "./global.css";
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>VoltOps Mobile</Text>
-      <Text>Expo + React Native</Text>
-      <StatusBar style="auto" />
+    <View className="flex-1 bg-midnight items-center justify-center p-8">
+      <View className="bg-slate-navy p-8 rounded-[32px] items-center space-y-4">
+        <Text className="text-white font-bold text-3xl tracking-tight">VoltOps Mobile</Text>
+        <Text className="text-cyan-glow font-medium text-lg">Hyper-Charge Active</Text>
+        <Text className="text-muted text-sm text-center">Tailwind CSS + NativeWind setup verified.</Text>
+      </View>
+      <StatusBar style="light" />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
