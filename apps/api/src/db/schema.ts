@@ -20,7 +20,7 @@ export const users = pgTable(
     authUserId: uuid('auth_user_id'),
     firstName: varchar('first_name', { length: 100 }).notNull(),
     lastName: varchar('last_name', { length: 100 }).notNull(),
-    tckn: integer('tckn'),
+    tckn: varchar('tckn', { length: 11 }),
     email: varchar('email', { length: 200 }).notNull(),
     phone: varchar('phone', { length: 30 }),
     passwordHash: varchar('password_hash', { length: 255 }),

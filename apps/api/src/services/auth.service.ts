@@ -1,7 +1,7 @@
 import { createClient, User } from '@supabase/supabase-js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { userVehicles, users, vehicles } from '../db/schema';
+import { employees, userVehicles, users, vehicles } from '../db/schema';
 import '../env';
 import { HttpError } from '../utils/http';
 import { logger } from '../utils/logger';
@@ -12,6 +12,10 @@ export interface AuthContext {
   token: string;
   supabaseUser: User;
   appUser: AppUser;
+}
+
+export interface AdminAuthContext extends AuthContext {
+  employee: typeof employees.$inferSelect;
 }
 
 function parseBearerToken(authorization?: string): string {
@@ -76,6 +80,27 @@ export class AuthService {
       supabaseUser: data.user,
       appUser: await this.findOrCreateUser(data.user, requestId),
     };
+  }
+
+  async authenticateAdmin(authorization?: string, requestId?: string): Promise<AdminAuthContext> {
+    const auth = await this.authenticate(authorization, requestId);
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(and(eq(employees.userId, auth.appUser.id), eq(employees.status, 'active')));
+
+    if (!employee) {
+      throw new HttpError(403, 'Active employee access is required');
+    }
+
+    logger.debug('auth.admin_verified', {
+      requestId,
+      userId: auth.appUser.id,
+      employeeId: employee.id,
+      employeeCode: employee.employeeCode,
+    });
+
+    return { ...auth, employee };
   }
 
   async getProfile(userId: number) {

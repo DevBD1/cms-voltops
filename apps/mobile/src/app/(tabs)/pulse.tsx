@@ -21,6 +21,27 @@ export default function ActiveSession() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  async function terminateSession() {
+    if (!session) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await apiRequest(`/api/mobile/sessions/${session.id}/end`, {
+        method: "POST",
+        body: JSON.stringify({ energyKwh: 15.0 }),
+      });
+      setSession(null);
+      setErrorMessage(null);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to terminate session");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   useEffect(() => {
     let isMounted = true;
 
@@ -108,7 +129,11 @@ export default function ActiveSession() {
         </View>
       </View>
 
-      <Pressable className="w-full bg-red-500/10 border border-red-500/20 active:bg-red-500/25 py-4 rounded-2xl items-center justify-center mb-4">
+      <Pressable
+        onPress={terminateSession}
+        disabled={!session || isLoading}
+        className="w-full bg-red-500/10 border border-red-500/20 active:bg-red-500/25 py-4 rounded-2xl items-center justify-center mb-4 disabled:opacity-50"
+      >
         <Text className="text-red-400 font-bold text-base">
           {session ? "Terminate Session" : "No Active Session"}
         </Text>

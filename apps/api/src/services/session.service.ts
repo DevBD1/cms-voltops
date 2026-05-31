@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { plugs, receipts, sessions, users } from '../db/schema';
+import { plugs, receipts, sessions, users, userVehicles } from '../db/schema';
 import { HttpError } from '../utils/http';
 import { CatalogService } from './catalog.service';
 
@@ -28,21 +28,36 @@ export class SessionService {
 
     const session = await db.transaction(async (tx) => {
       const [user] = await tx.select().from(users).where(eq(users.id, userId));
-      const [plug] = await tx.select().from(plugs).where(eq(plugs.plugCode, plugCode));
 
       if (!user || !user.isActive) {
         throw new HttpError(404, 'Active user not found');
       }
 
-      if (!plug) {
-        throw new HttpError(404, 'Plug not found');
+      if (vehiclePlateNumber) {
+        const [vehicle] = await tx
+          .select({ id: userVehicles.id })
+          .from(userVehicles)
+          .where(and(eq(userVehicles.userId, userId), eq(userVehicles.vehiclePlateNumber, vehiclePlateNumber)));
+        if (!vehicle) {
+          throw new HttpError(404, 'Vehicle not found');
+        }
       }
 
-      if (plug.status !== 'available') {
+      const [claimedPlug] = await tx
+        .update(plugs)
+        .set({ status: 'in_use', updatedAt: now })
+        .where(and(eq(plugs.plugCode, plugCode), eq(plugs.status, 'available')))
+        .returning();
+
+      if (!claimedPlug) {
+        const [plug] = await tx.select().from(plugs).where(eq(plugs.plugCode, plugCode));
+
+        if (!plug) {
+          throw new HttpError(404, 'Plug not found');
+        }
+
         throw new HttpError(409, 'Plug is not available');
       }
-
-      await tx.update(plugs).set({ status: 'in_use', updatedAt: now }).where(eq(plugs.plugCode, plugCode));
 
       const [createdSession] = await tx
         .insert(sessions)

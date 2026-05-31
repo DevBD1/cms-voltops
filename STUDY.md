@@ -20,6 +20,7 @@ Welcome to the **VoltOps** engineering team! This document is designed to onboar
 2.  **Request Authorization:** All subsequent requests to the Express API include the JWT in the headers as a Bearer token (`Authorization: Bearer <Supabase JWT>`).
 3.  **API Verification Middleware:** The Express API's `AuthService` extracts the token, verifies it against the Supabase Auth engine (`supabaseAuth.auth.getUser(token)`), and loads the verified payload.
 4.  **Local User Sync:** Once verified, the API automatically performs a **find-or-create lookup** in our local database `users` table using the user's Supabase UUID (`auth_user_id`) or verified email, mapping it to a local primary key.
+5.  **Admin Authorization:** Admin API routes require a valid Supabase token plus an active `employees` row linked to the synced local user. Authenticated users without active employee access receive `403 Forbidden`.
 
 ```
 ┌──────────────┐          Supabase Login           ┌──────────────┐
@@ -54,6 +55,7 @@ Welcome to the **VoltOps** engineering team! This document is designed to onboar
 **A:** The database schema is defined programmatically using **Drizzle ORM** (`apps/api/src/db/schema.ts`) and targets a highly relational Postgres model:
 1.  **Identity Management:**
     *   `users`: Primary account records holding name, email, phone, and metadata like Terms of Service (`terms_of_service`) and marketing consents.
+        *   `tckn` is stored as `varchar(11)` rather than an integer so all 11-digit Turkish Identification Numbers fit safely and keep identifier formatting intact.
     *   `employees`: Extends `users` with staff details (`employee_code`, `department`, `job_title`, `hire_date`).
     *   `addresses`: Relates to `users` to store billing or residential locations.
 2.  **Vehicle Management:**
@@ -80,8 +82,9 @@ Welcome to the **VoltOps** engineering team! This document is designed to onboar
 1.  **Validation:** The endpoint receives the user's verified ID, target `plugCode`, and an optional `vehiclePlateNumber`.
 2.  **Database Transaction:**
     *   Verifies the user exists and is active.
-    *   Verifies the plug exists and has a status of `'available'`.
-    *   Changes the plug's status to `'in_use'` to prevent double-booking conflicts.
+    *   If a vehicle plate is provided, verifies that the plate belongs to the requesting user through `user_vehicles`.
+    *   Atomically claims the plug with a conditional update (`plug_code` matches and `status = 'available'`) and changes it to `'in_use'`.
+    *   If the atomic claim fails, the service returns `404` for a missing plug or `409` for an existing plug that is not available.
     *   Inserts a new record into `sessions` with a status of `'active'` and notes the start time (`started_at`).
 
 #### End Session Lifecycle
@@ -134,6 +137,9 @@ Welcome to the **VoltOps** engineering team! This document is designed to onboar
 *   **Current local Compose scope:** The local Docker Compose stack runs the Express API container and expects Supabase connection settings through environment variables.
 *   **Future infrastructure tools:** Nginx, Redis, and Dozzle remain planned infrastructure options, but they are not currently active services in `docker-compose.yml`.
 
+### Q10: How does the API handle browser CORS preflight requests?
+**A:** The Express API sets CORS headers for `GET`, `POST`, `PATCH`, and `OPTIONS`, then short-circuits any `OPTIONS` request with `204 No Content` before route handlers run. This is important because browser clients that send JSON bodies or `Authorization` headers perform a preflight request before the real API call.
+
 ---
 
 ## 6. Interview Preparation Cheat Sheet
@@ -144,10 +150,11 @@ Use these quick summaries to answer common interview questions:
 | :--- | :--- |
 | **Database Solution** | Supabase Postgres (canonical DB) + Drizzle ORM. |
 | **API Framework** | Node.js with Express and TypeScript. |
-| **Authentication Flow** | Clients fetch JWTs from Supabase Auth; Express middleware validates the Bearer token and syncs the user locally. |
+| **Authentication Flow** | Clients fetch JWTs from Supabase Auth; Express validates the Bearer token and syncs the user locally. Admin routes additionally require an active `employees` row. |
 | **Data Boundary Rule** | Mobile and admin UI clients *never* make direct data mutations to Supabase; Express acts as the strict logic gateway. |
-| **Transaction Strategy** | Critical state mutations (e.g. starting/stopping sessions, plug status updates, invoice generation) are fully wrapped in database transactions to guarantee integrity. |
+| **Transaction Strategy** | Critical state mutations are wrapped in database transactions; starting a session atomically claims an available plug to prevent double-booking. |
 | **Mobile Tech Stack** | React Native Expo styled with Tailwind CSS (via NativeWind). |
 | **Admin UI Stack** | React SPA scaffolded with Vite and TypeScript. |
 | **Container Engine** | Docker Compose managing the Express API against Supabase Postgres. |
 | **Geo-Location Math** | The Haversine Formula calculates station-to-user proximity inside JS service layers. |
+| **CORS Preflight** | `OPTIONS` requests return `204 No Content` before protected route handlers execute. |

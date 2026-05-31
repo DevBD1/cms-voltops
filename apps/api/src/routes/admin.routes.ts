@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { AuthService } from '../services/auth.service';
 import { CatalogService } from '../services/catalog.service';
 import { PlugStatus, StationStatus } from '../services/catalog.service';
 import { SessionService } from '../services/session.service';
@@ -10,11 +11,22 @@ const allowedPlugStatuses: PlugStatus[] = ['available', 'in_use', 'fault', 'offl
 const allowedStationStatuses: StationStatus[] = ['active', 'maintenance', 'offline'];
 
 export function createAdminRouter(
+  authService: AuthService,
   catalogService: CatalogService,
   sessionService: SessionService,
   ticketService: TicketService,
 ): Router {
   const router = Router();
+
+  router.use(async (req, res, next) => {
+    try {
+      const auth = await authService.authenticateAdmin(req.header('authorization'), res.locals.requestId);
+      res.locals.auth = auth;
+      next();
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
 
   router.get('/dashboard', async (_req, res) => {
     try {
