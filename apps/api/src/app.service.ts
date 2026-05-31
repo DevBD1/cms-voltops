@@ -1,5 +1,9 @@
 export class AppService {
-  getHello(): string {
-    return 'Hello World!';
+  getHealth() {
+    return {
+      status: 'ok',
+      service: '@voltops/api',
+      timestamp: new Date().toISOString(),
+    };
   }
 }

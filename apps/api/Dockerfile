@@ -18,6 +18,8 @@ RUN pnpm install --filter @voltops/api --prod --frozen-lockfile
 FROM manifests AS build
 RUN pnpm install --filter @voltops/api --frozen-lockfile
 COPY apps/api/tsconfig.json apps/api/tsconfig.json
+COPY apps/api/drizzle.config.ts apps/api/drizzle.config.ts
+COPY apps/api/drizzle apps/api/drizzle
 COPY apps/api/src apps/api/src
 RUN pnpm --filter @voltops/api build
 
@@ -28,7 +30,8 @@ WORKDIR /repo/apps/api
 COPY --chown=node:node --from=prod-deps /repo/node_modules /repo/node_modules
 COPY --chown=node:node --from=prod-deps /repo/apps/api/node_modules ./node_modules
 COPY --chown=node:node --from=build /repo/apps/api/dist ./dist
+COPY --chown=node:node --from=build /repo/apps/api/drizzle ./drizzle
 COPY --chown=node:node apps/api/package.json ./package.json
 USER node
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "node dist/db/migrate.js && node dist/main.js"]
