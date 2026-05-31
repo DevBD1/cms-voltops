@@ -12,13 +12,8 @@
     "compose:down": "docker compose down",
     "compose:logs": "docker compose logs -f",
     "compose:config": "docker compose config -q",
-    "db:up": "docker compose up -d db",
-    "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f db",
     "api:up": "docker compose up -d api",
-    "api:logs": "docker compose logs -f api",
-    "pgadmin:up": "docker compose up -d pgadmin",
-    "pgadmin:logs": "docker compose logs -f pgadmin"
+    "api:logs": "docker compose logs -f api"
   },
   "pnpm": {
     "overrides": {
