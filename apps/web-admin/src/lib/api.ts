@@ -3,6 +3,8 @@
  * Base URL is intentionally empty so the Vite proxy (/api → localhost:3000) handles routing in dev.
  */
 
+import { AUTH_KEY } from './constants';
+
 const BASE = '/api';
 
 export class ApiError extends Error {
@@ -17,7 +19,7 @@ export class ApiError extends Error {
 
 function getToken(): string | null {
   try {
-    const raw = localStorage.getItem('voltops_auth');
+    const raw = localStorage.getItem(AUTH_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as { token?: string };
     return session.token ?? null;
@@ -77,7 +79,7 @@ export const authApi = {
 
 // ─── Stations ─────────────────────────────────────────────────────────────────
 
-import type { Station, StationDetail, Plug, Session, Receipt, MaintenanceRecord, Ticket, User } from '../types/db.types';
+import type { Station, StationDetail, Plug, PlugStatus, Session, Receipt, MaintenanceRecord, Ticket, User } from '../types/db.types';
 
 export const stationsApi = {
   list: () => request<Station[]>('/stations'),
@@ -100,7 +102,7 @@ export const stationsApi = {
 export const plugsApi = {
   list: () => request<Plug[]>('/plugs'),
   byStation: (stationId: number) => request<Plug[]>(`/plugs/by-station/${stationId}`),
-  updateStatus: (id: number, status: string) =>
+  updateStatus: (id: number, status: PlugStatus) =>
     request<Plug>(`/plugs/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 };
 
@@ -136,7 +138,10 @@ export const usersApi = {
     password: string;
     phone?: string;
   }) => request<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: number, data: Partial<User>) =>
+  // Narrowed to only what the server's PATCH /api/users/:id actually accepts.
+  // Omitting role intentionally — sending it would be silently ignored by the server today
+  // but creates a latent privilege-escalation risk if the route is ever extended.
+  update: (id: number, data: { firstName?: string; lastName?: string; phone?: string; isActive?: boolean }) =>
     request<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 

@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { ADMIN_ROLES } from './lib/auth';
 import AdminApp from './pages/admin/AdminApp';
 import CustomerApp from './pages/customer/CustomerApp';
 import Landing from './pages/Landing';
@@ -24,7 +25,7 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute allowedRoles={['ADMIN', 'OPERATOR', 'TECHNICIAN']}>
+            <ProtectedRoute allowedRoles={ADMIN_ROLES}>
               <AdminApp />
             </ProtectedRoute>
           }

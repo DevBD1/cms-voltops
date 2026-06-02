@@ -2,6 +2,8 @@ interface VoltOpsLogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showWordmark?: boolean;
+  /** Use 'white' on dark photo backgrounds where brand colors are illegible. */
+  wordmarkColor?: 'brand' | 'white';
 }
 
 const SIZES = {
@@ -18,8 +20,14 @@ const WORDMARK = {
   xl: { title: 'text-3xl', tag: 'text-sm' },
 } as const;
 
-export function VoltOpsLogo({ className = '', size = 'md', showWordmark = true }: VoltOpsLogoProps) {
+const COLOR = {
+  brand: { title: 'text-brand-600 dark:text-brand-400', tag: 'text-slate-500 dark:text-slate-400' },
+  white: { title: 'text-white',                          tag: 'text-white/60' },
+} as const;
+
+export function VoltOpsLogo({ className = '', size = 'md', showWordmark = true, wordmarkColor = 'brand' }: VoltOpsLogoProps) {
   const wm = WORDMARK[size];
+  const color = COLOR[wordmarkColor];
 
   return (
     <span className={`inline-flex items-center gap-3 ${className}`}>
@@ -36,12 +44,10 @@ export function VoltOpsLogo({ className = '', size = 'md', showWordmark = true }
       </span>
       {showWordmark && (
         <span className="flex flex-col leading-tight">
-          <span className={`${wm.title} font-bold tracking-tight text-brand-600 dark:text-brand-400`}>
+          <span className={`${wm.title} font-bold tracking-tight ${color.title}`}>
             VoltOps
           </span>
-          <span
-            className={`${wm.tag} hidden font-medium uppercase tracking-widest text-slate-500 sm:block dark:text-slate-400`}
-          >
+          <span className={`${wm.tag} hidden font-medium uppercase tracking-widest sm:block ${color.tag}`}>
             Araç Şarj Ağı
           </span>
         </span>

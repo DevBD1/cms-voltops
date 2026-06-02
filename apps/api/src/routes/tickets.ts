@@ -109,7 +109,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
       return;
     }
 
-    const { status, priority, assignedEmployeeId } = req.body;
+    const { status, priority, assignedEmployeeId, title, description } = req.body;
     const patch: Record<string, unknown> = {};
 
     if (isStaff) {
@@ -117,6 +117,14 @@ router.patch('/:id', requireAuth, async (req, res) => {
       if (priority !== undefined) patch.priority = priority;
       if (assignedEmployeeId !== undefined)
         patch.assignedEmployeeId = Number(assignedEmployeeId);
+    } else {
+      // Customers may only edit title/description on their own OPEN tickets.
+      if (ticket.status !== 'OPEN') {
+        res.status(403).json({ error: 'Yalnızca açık talepler düzenlenebilir.' });
+        return;
+      }
+      if (title !== undefined) patch.title = title;
+      if (description !== undefined) patch.description = description;
     }
 
     if (Object.keys(patch).length === 0) {

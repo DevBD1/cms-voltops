@@ -50,7 +50,7 @@ Invoke: `@agent-roles` or reference this skill when starting UI, API, or schema 
 ## Sources of truth
 
 1. `apps/web-admin/src/types/db.types.ts`
-2. `packages/database/ev_charge_network.sql`
+2. `packages/database/src/schema.ts` (Drizzle ORM, PostgreSQL)
 3. Backend routes only — no invented client-only domain fields
 
 Project UI rules: `.cursor/rules/VoltOps-System-UI-UX-Guidelines.mdc`
@@ -62,7 +62,7 @@ Schema audit:
 - [ ] Every displayed field exists on a type in db.types.ts (or SQL column)
 - [ ] Enum values match DB enums (e.g. StationStatus, SocketStatus)
 - [ ] No placeholder KPIs (uptime %, revenue, "health score") unless in schema
-- [ ] Relations respect cardinality (Station → Device → Socket)
+- [ ] Relations respect cardinality (Station → Plug; no Device layer)
 - [ ] Forms submit only writable columns
 - [ ] Mock data in mocks/ mirrors db.types.ts shapes exactly
 ```

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { sessions, plugs, users, stations } from '@voltops/db';
 import { requireAuth, requireRole } from '../middleware/auth';
@@ -38,7 +38,7 @@ router.get('/', requireAuth, async (req, res) => {
       .innerJoin(users, eq(sessions.userId, users.id))
       .innerJoin(plugs, eq(sessions.plugId, plugs.id))
       .innerJoin(stations, eq(plugs.stationId, stations.id))
-      .orderBy(sessions.startedAt);
+      .orderBy(desc(sessions.startedAt));
 
     const rows = isStaff ? await query : await query.where(eq(sessions.userId, userId));
 
@@ -70,25 +70,29 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   try {
-    // Check plug availability
-    const [plug] = await db.select().from(plugs).where(eq(plugs.id, plugId)).limit(1);
-    if (!plug) {
-      res.status(404).json({ error: 'Soket bulunamadı.' });
-      return;
-    }
-    if (plug.status !== 'AVAILABLE') {
-      res.status(409).json({ error: 'Soket şu anda müsait değil.' });
-      return;
-    }
+    // Lock the plug row and re-check availability inside the transaction so two
+    // concurrent requests can't both pass the guard and double-book the plug.
+    const result = await db.transaction(async (tx) => {
+      const [plug] = await tx
+        .select()
+        .from(plugs)
+        .where(eq(plugs.id, plugId))
+        .limit(1)
+        .for('update');
 
-    // Create session + mark plug as CHARGING in a transaction
-    const [session] = await db.transaction(async (tx) => {
+      if (!plug) {
+        return { error: { code: 404, message: 'Soket bulunamadı.' } } as const;
+      }
+      if (plug.status !== 'AVAILABLE') {
+        return { error: { code: 409, message: 'Soket şu anda müsait değil.' } } as const;
+      }
+
       await tx
         .update(plugs)
         .set({ status: 'CHARGING', updatedAt: new Date() })
         .where(eq(plugs.id, plugId));
 
-      return tx
+      const [session] = await tx
         .insert(sessions)
         .values({
           userId,
@@ -97,9 +101,16 @@ router.post('/', requireAuth, async (req, res) => {
           status: 'ACTIVE',
         })
         .returning();
+
+      return { session } as const;
     });
 
-    res.status(201).json(session);
+    if ('error' in result) {
+      res.status(result.error.code).json({ error: result.error.message });
+      return;
+    }
+
+    res.status(201).json(result.session);
   } catch (err) {
     console.error('POST /sessions error:', err);
     res.status(500).json({ error: 'Seans başlatılamadı.' });

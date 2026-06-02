@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { getSession } from '../lib/auth';
+import { getSession, getPostLoginPath } from '../lib/auth';
 import type { UserRole } from '../types/db.types';
 
 interface ProtectedRouteProps {
@@ -18,8 +18,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const role = session.user.role;
 
   if (allowedRoles && !allowedRoles.includes(role)) {
-    const fallback = role === 'CUSTOMER' ? '/app' : '/dashboard';
-    return <Navigate to={fallback} replace />;
+    return <Navigate to={getPostLoginPath(role)} replace />;
   }
 
   return <>{children}</>;
