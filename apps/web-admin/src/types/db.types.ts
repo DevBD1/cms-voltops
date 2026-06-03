@@ -150,7 +150,9 @@ export interface MaintenanceRecord {
 export interface Ticket {
   id: number;
   userId: number;
+  userFullName: string;
   stationCode: string | null;
+  stationName: string | null;
   title: string;
   description: string;
   priority: TicketPriority;

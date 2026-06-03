@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { receipts, sessions, stations, users } from '../db/schema';
+import { receipts, sessions, stations, tickets as ticketsTable, users } from '../db/schema';
 import { AuthService } from '../services/auth.service';
 import { CatalogService, deriveCurrentType, type StationSummary, type PlugDetails } from '../services/catalog.service';
 import { MaintenanceService } from '../services/maintenance.service';
@@ -555,9 +555,45 @@ export function createAdminRouter(
   router.get('/tickets', async (req, res) => {
     try {
       const status = req.query.status === undefined ? undefined : String(req.query.status);
-      const ticketRows = await ticketService.listTickets({ status });
-      logger.debug('admin.tickets_listed', { requestId: res.locals.requestId, count: ticketRows.length });
-      res.json({ data: ticketRows });
+
+      // Enrich with userFullName and stationName via joins
+      const rows = await db
+        .select({
+          id: ticketsTable.id,
+          userId: ticketsTable.userId,
+          userFirstName: users.firstName,
+          userLastName: users.lastName,
+          stationCode: ticketsTable.stationCode,
+          stationName: stations.name,
+          title: ticketsTable.title,
+          description: ticketsTable.description,
+          priority: ticketsTable.priority,
+          status: ticketsTable.status,
+          createdAt: ticketsTable.createdAt,
+          updatedAt: ticketsTable.updatedAt,
+        })
+        .from(ticketsTable)
+        .leftJoin(users, eq(ticketsTable.userId, users.id))
+        .leftJoin(stations, eq(ticketsTable.stationCode, stations.stationCode))
+        .where(status ? eq(ticketsTable.status, status) : undefined)
+        .orderBy(ticketsTable.createdAt);
+
+      const data = rows.map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        userFullName: `${r.userFirstName ?? ''} ${r.userLastName ?? ''}`.trim() || 'Unknown',
+        stationCode: r.stationCode,
+        stationName: r.stationName ?? null,
+        title: r.title,
+        description: r.description,
+        priority: r.priority,
+        status: r.status,
+        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+        updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+      }));
+
+      logger.debug('admin.tickets_listed', { requestId: res.locals.requestId, count: data.length });
+      res.json({ data });
     } catch (error) {
       sendError(res, error);
     }

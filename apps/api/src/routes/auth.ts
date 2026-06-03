@@ -124,7 +124,8 @@ router.post('/login', async (req, res) => {
     });
 
     if (error || !data.session) {
-      logger.info('auth.login_failed', { email });
+      logger.info('auth.login_failed', { email, supabaseError: error?.message, supabaseCode: error?.code });
+      console.error('[auth] Supabase signInWithPassword failed:', error);
       res.status(401).json({ error: 'Geçersiz kimlik bilgileri.' });
       return;
     }
