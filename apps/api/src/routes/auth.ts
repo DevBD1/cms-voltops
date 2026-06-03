@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type User as SupabaseUser } from '@supabase/supabase-js';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { employees, users } from '../db/schema';
@@ -7,19 +7,6 @@ import { sendError } from '../utils/http';
 import { logger } from '../utils/logger';
 
 const router = Router();
-
-/**
- * Derives an application-level role from the presence of an active employee record.
- * All active employees are treated as ADMIN for the web admin panel.
- * Users without an employee record are treated as CUSTOMER.
- */
-async function deriveRole(userId: number): Promise<'ADMIN' | 'CUSTOMER'> {
-  const [employee] = await db
-    .select({ id: employees.id })
-    .from(employees)
-    .where(eq(employees.userId, userId));
-  return employee ? 'ADMIN' : 'CUSTOMER';
-}
 
 /** Shared Supabase client factory (publishable key, no session persistence). */
 function makeSupabaseClient() {
@@ -30,11 +17,94 @@ function makeSupabaseClient() {
 }
 
 /**
+ * Derives first/last name from Supabase user metadata.
+ * Falls back to the email prefix when no name metadata is present.
+ */
+function nameFromSupabaseUser(supabaseUser: SupabaseUser) {
+  const meta = supabaseUser.user_metadata ?? {};
+  const firstName = typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
+  const lastName  = typeof meta.last_name  === 'string' ? meta.last_name.trim()  : '';
+
+  if (firstName || lastName) return { firstName: firstName || 'User', lastName };
+
+  const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+  if (fullName) {
+    const [first, ...rest] = fullName.split(/\s+/);
+    return { firstName: first || 'User', lastName: rest.join(' ') };
+  }
+
+  // Last resort: use the part of the email before @
+  return { firstName: supabaseUser.email?.split('@')[0] ?? 'User', lastName: '' };
+}
+
+/**
+ * Finds the public.users row that matches the Supabase Auth user.
+ * Creates it automatically on first login — mirrors AuthService.findOrCreateUser.
+ */
+async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
+  // 1. Try by Supabase Auth UUID (fastest path after first login)
+  const [byAuthId] = await db
+    .select()
+    .from(users)
+    .where(eq(users.authUserId, supabaseUser.id))
+    .limit(1);
+  if (byAuthId) return byAuthId;
+
+  // 2. Try by email (user may exist from a previous auth method)
+  const [byEmail] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, supabaseUser.email!))
+    .limit(1);
+
+  if (byEmail) {
+    // Link the Supabase UUID so future lookups hit path 1
+    const [linked] = await db
+      .update(users)
+      .set({ authUserId: supabaseUser.id, updatedAt: new Date() })
+      .where(eq(users.id, byEmail.id))
+      .returning();
+    return linked;
+  }
+
+  // 3. First-ever login — create the row
+  const { firstName, lastName } = nameFromSupabaseUser(supabaseUser);
+  const [created] = await db
+    .insert(users)
+    .values({
+      authUserId: supabaseUser.id,
+      firstName,
+      lastName,
+      email: supabaseUser.email!,
+      phone: supabaseUser.phone ?? null,
+      isActive: true,
+      termsOfService: new Date(),
+    })
+    .returning();
+
+  logger.debug('auth.app_user_created', { userId: created.id, email: created.email });
+  return created;
+}
+
+/**
+ * Derives an application-level role from the presence of an active employee record.
+ * Employee present → ADMIN (admin dashboard).
+ * No employee record → CUSTOMER (customer portal).
+ */
+async function deriveRole(userId: number): Promise<'ADMIN' | 'CUSTOMER'> {
+  const [employee] = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(eq(employees.userId, userId));
+  return employee ? 'ADMIN' : 'CUSTOMER';
+}
+
+/**
  * POST /api/auth/login
- * Authenticates via Supabase and returns the Supabase access token
- * alongside the user's profile from the application database.
+ * Authenticates via Supabase, auto-creates public.users on first login,
+ * and returns the Supabase access token + app-level user profile.
  *
- * Body: { email: string; password: string }
+ * Body:    { email: string; password: string }
  * Returns: { token: string; user: { id, email, firstName, lastName, role } }
  */
 router.post('/login', async (req, res) => {
@@ -59,14 +129,11 @@ router.post('/login', async (req, res) => {
       return;
     }
 
-    const [appUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, data.user.email!))
-      .limit(1);
+    // Auto-creates public.users row on first login
+    const appUser = await findOrCreateAppUser(data.user);
 
-    if (!appUser || !appUser.isActive) {
-      res.status(401).json({ error: 'Hesabınız bulunamadı veya deaktif edilmiş.' });
+    if (!appUser.isActive) {
+      res.status(401).json({ error: 'Hesabınız deaktif edilmiş.' });
       return;
     }
 
@@ -91,7 +158,7 @@ router.post('/login', async (req, res) => {
 
 /**
  * GET /api/auth/me
- * Returns the authenticated user's profile (works for all authenticated users).
+ * Returns the authenticated user's profile.
  * Requires a valid Supabase Bearer token in Authorization header.
  */
 router.get('/me', async (req, res) => {
@@ -112,14 +179,10 @@ router.get('/me', async (req, res) => {
       return;
     }
 
-    const [appUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, data.user.email))
-      .limit(1);
+    const appUser = await findOrCreateAppUser(data.user);
 
-    if (!appUser || !appUser.isActive) {
-      res.status(401).json({ error: 'Kullanıcı bulunamadı.' });
+    if (!appUser.isActive) {
+      res.status(401).json({ error: 'Hesabınız deaktif edilmiş.' });
       return;
     }
 
