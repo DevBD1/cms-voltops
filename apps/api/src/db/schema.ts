@@ -103,6 +103,7 @@ export const userVehicles = pgTable(
   (table) => ({
     userIdx: index('user_vehicles_user_id_idx').on(table.userId),
     vehicleIdx: index('user_vehicles_vehicle_plate_number_idx').on(table.vehiclePlateNumber),
+    userVehicleIdx: uniqueIndex('user_vehicles_user_vehicle_unique').on(table.userId, table.vehiclePlateNumber),
   }),
 );
 

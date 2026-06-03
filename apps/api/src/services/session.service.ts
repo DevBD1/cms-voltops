@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { plugs, receipts, sessions, users, userVehicles } from '../db/schema';
 import { HttpError } from '../utils/http';
@@ -8,19 +8,26 @@ const fallbackPricePerKwh = 7.5;
 const receiptTaxRate = 0.2;
 
 type Session = typeof sessions.$inferSelect;
+export type SessionStatus = 'active' | 'completed' | 'cancelled';
 
 export class SessionService {
   constructor(private readonly catalogService: CatalogService) {}
 
-  async listSessions(filters?: { userId?: number; status?: string }) {
-    const sessionRows = await db.select().from(sessions);
+  async listSessions(filters?: { userId?: number; status?: SessionStatus | string }) {
+    const conditions: SQL[] = [];
 
-    return Promise.all(
-      sessionRows
-        .filter((session) => (filters?.userId ? session.userId === filters.userId : true))
-        .filter((session) => (filters?.status ? session.status === filters.status : true))
-        .map((session) => this.withContext(session)),
-    );
+    if (filters?.userId !== undefined) {
+      conditions.push(eq(sessions.userId, filters.userId));
+    }
+
+    if (filters?.status) {
+      conditions.push(eq(sessions.status, filters.status));
+    }
+
+    const query = db.select().from(sessions);
+    const sessionRows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+
+    return Promise.all(sessionRows.map((session) => this.withContext(session)));
   }
 
   async startSession(userId: number, plugCode: string, vehiclePlateNumber?: string | null) {
@@ -31,6 +38,15 @@ export class SessionService {
 
       if (!user || !user.isActive) {
         throw new HttpError(404, 'Active user not found');
+      }
+
+      const [activeSession] = await tx
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(and(eq(sessions.userId, userId), eq(sessions.status, 'active')));
+
+      if (activeSession) {
+        throw new HttpError(409, 'Active session already exists');
       }
 
       if (vehiclePlateNumber) {
