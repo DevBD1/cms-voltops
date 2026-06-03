@@ -72,6 +72,10 @@ function admin<T>(path: string, init: RequestInit = {}): Promise<T> {
   return request<T>(ADMIN_BASE, path, init);
 }
 
+function mobile<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return request<T>('/api/mobile', path, init);
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const authApi = {
@@ -190,6 +194,18 @@ export const maintenanceApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+};
+
+// ─── Customer tickets (mobile route — returns only the current user's tickets) ─
+
+export const customerTicketsApi = {
+  list: () => mobile<Ticket[]>('/tickets'),
+  create: (data: {
+    title: string;
+    description: string;
+    priority?: string;
+    stationCode?: string;
+  }) => mobile<Ticket>('/tickets', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ─── Tickets ──────────────────────────────────────────────────────────────────

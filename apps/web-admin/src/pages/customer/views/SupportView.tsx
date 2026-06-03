@@ -1,16 +1,39 @@
 import { useEffect, useState } from 'react';
 import { EmptyState } from '../../../components/customer/EmptyState';
 import { TicketPriorityBadge, TicketStatusBadge } from '../../../components/customer/StatusBadge';
-import { ticketsApi } from '../../../lib/api';
+import { customerTicketsApi } from '../../../lib/api';
 import { formatDate } from '../../../lib/formatters';
 import type { Ticket } from '../../../types/db.types';
+
+/** Map raw DB priority values → badge enum values */
+function normalisePriority(raw: string): 'LOW' | 'MEDIUM' | 'CRITICAL' {
+  const map: Record<string, 'LOW' | 'MEDIUM' | 'CRITICAL'> = {
+    low: 'LOW',
+    normal: 'MEDIUM',
+    medium: 'MEDIUM',
+    high: 'CRITICAL',
+    critical: 'CRITICAL',
+  };
+  return map[raw?.toLowerCase()] ?? 'MEDIUM';
+}
+
+/** Map raw DB status values → badge enum values */
+function normaliseStatus(raw: string): 'OPEN' | 'IN_PROGRESS' | 'CLOSED' {
+  const map: Record<string, 'OPEN' | 'IN_PROGRESS' | 'CLOSED'> = {
+    open: 'OPEN',
+    in_progress: 'IN_PROGRESS',
+    resolved: 'CLOSED',
+    closed: 'CLOSED',
+  };
+  return map[raw?.toLowerCase()] ?? 'OPEN';
+}
 
 export function SupportView() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    ticketsApi
+    customerTicketsApi
       .list()
       .then(setTickets)
       .catch(() => setTickets([]))
@@ -35,11 +58,11 @@ export function SupportView() {
           {tickets.map((ticket) => (
             <li
               key={ticket.id}
-              className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#111111]"
+              className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-ink"
             >
               <div className="flex items-start justify-between gap-3">
                 <h2 className="font-semibold text-slate-900 dark:text-white">{ticket.title}</h2>
-                <TicketStatusBadge status={ticket.status} />
+                <TicketStatusBadge status={normaliseStatus(ticket.status)} />
               </div>
               {ticket.stationName && (
                 <p className="mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -50,7 +73,7 @@ export function SupportView() {
                 {ticket.description}
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                <TicketPriorityBadge priority={ticket.priority} />
+                <TicketPriorityBadge priority={normalisePriority(ticket.priority)} />
                 <span>{formatDate(ticket.createdAt)}</span>
               </div>
             </li>
