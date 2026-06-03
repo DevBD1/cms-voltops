@@ -11,9 +11,15 @@ export type StationStatus = 'active' | 'maintenance' | 'offline';
 export interface StationSummary extends Station {
   totalPlugs: number;
   availablePlugs: number;
+  faultyPlugs: number;
   maxPowerKw: number;
   plugTypes: string[];
   distanceKm?: number;
+}
+
+/** Maps a raw plug_type string to an AC/DC current type. */
+export function deriveCurrentType(plugType: string): 'AC' | 'DC' {
+  return plugType.toUpperCase().startsWith('AC') ? 'AC' : 'DC';
 }
 
 export interface PlugDetails extends Plug {
@@ -124,6 +130,7 @@ export class CatalogService {
       ...station,
       totalPlugs: stationPlugs.length,
       availablePlugs: stationPlugs.filter((plug) => plug.status === 'available').length,
+      faultyPlugs: stationPlugs.filter((plug) => plug.status === 'fault').length,
       maxPowerKw: Math.max(...stationPlugs.map((plug) => Number(plug.powerKw)), 0),
       plugTypes: [...new Set(stationPlugs.map((plug) => plug.plugType))],
     };

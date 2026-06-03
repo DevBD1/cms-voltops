@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import './env';
 import { AppService } from './app.service';
 import { createAdminRouter } from './routes/admin.routes';
+import { createAuthRouter } from './routes/auth';
 import { createMobileRouter } from './routes/mobile.routes';
 import { AuthService } from './services/auth.service';
 import { CatalogService } from './services/catalog.service';
@@ -35,7 +36,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (_req: Request, res: Response) => {
   res.json(appService.getHealth());
 });
 
@@ -43,6 +44,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json(appService.getHealth());
 });
 
+app.use('/api/auth', createAuthRouter());
 app.use('/api/mobile', createMobileRouter(authService, catalogService, sessionService, ticketService));
 app.use('/api/admin', createAdminRouter(authService, catalogService, sessionService, ticketService));
 
