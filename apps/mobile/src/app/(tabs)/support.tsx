@@ -232,7 +232,7 @@ export default function SupportDesk() {
                           className={`text-[9px] font-bold uppercase tracking-wider ${isResolved ? "text-[#39FF14]" : "text-cyan-glow"}`}
                           style={{ fontFamily: "Inter" }}
                         >
-                          Open
+                          {ticket.status}
                         </Text>
                       </View>
                     </Pressable>

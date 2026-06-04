@@ -19,7 +19,7 @@ Welcome to the **VoltOps** engineering team! This document is designed to onboar
 1.  **Token Issuance:** The mobile client authenticates directly with Supabase to obtain a JWT (Session access token).
 2.  **Request Authorization:** All subsequent requests to the Express API include the JWT in the headers as a Bearer token (`Authorization: Bearer <Supabase JWT>`).
 3.  **API Verification Middleware:** The Express API's `AuthService` extracts the token, verifies it against the Supabase Auth engine (`supabaseAuth.auth.getUser(token)`), and loads the verified payload.
-4.  **Local User Sync:** Once verified, the API automatically performs a **find-or-create lookup** in our local database `users` table using the user's Supabase UUID (`auth_user_id`) or verified email, mapping it to a local primary key.
+4.  **Local User Sync:** Once verified, the API automatically performs a **find-or-create lookup** in our local database `users` table using the user's Supabase UUID (`auth_user_id`) or verified email, mapping it to a local primary key. During signup sync, validated Supabase metadata (`phone`, `tckn`) is persisted for new local users and only backfills missing fields when linking an existing email-matched user.
 5.  **Admin Authorization:** Admin API routes require a valid Supabase token plus an active `employees` row linked to the synced local user. Authenticated users without active employee access receive `403 Forbidden`.
 
 ```

@@ -7,6 +7,7 @@ import { HttpError } from '../utils/http';
 import { logger } from '../utils/logger';
 
 type AppUser = typeof users.$inferSelect;
+type SignupIdentityMetadata = Pick<AppUser, 'phone' | 'tckn'>;
 
 export interface AuthContext {
   token: string;
@@ -44,6 +45,46 @@ function userNameFromAuthUser(user: User): Pick<AppUser, 'firstName' | 'lastName
   }
 
   return { firstName: user.email?.split('@')[0] || 'User', lastName: '' };
+}
+
+function optionalTrimmedString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function signupIdentityFromAuthUser(user: User): SignupIdentityMetadata {
+  const metadata = user.user_metadata ?? {};
+  const phone = optionalTrimmedString(metadata.phone) ?? optionalTrimmedString(user.phone);
+  const tckn = optionalTrimmedString(metadata.tckn);
+
+  if (phone && phone.length > 30) {
+    throw new HttpError(400, 'phone must be 30 characters or fewer');
+  }
+
+  if (tckn && !/^\d{11}$/.test(tckn)) {
+    throw new HttpError(400, 'tckn must be exactly 11 digits');
+  }
+
+  return { phone, tckn };
+}
+
+function isUniqueViolation(error: unknown, constraintName: string): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: unknown; constraint?: unknown; constraint_name?: unknown; message?: unknown };
+
+  return (
+    candidate.code === '23505' &&
+    (candidate.constraint === constraintName ||
+      candidate.constraint_name === constraintName ||
+      (typeof candidate.message === 'string' && candidate.message.includes(constraintName)))
+  );
 }
 
 export class AuthService {
@@ -136,39 +177,65 @@ export class AuthService {
       return existingByAuthId;
     }
 
+    const signupIdentity = signupIdentityFromAuthUser(supabaseUser);
     const [existingByEmail] = await db.select().from(users).where(eq(users.email, supabaseUser.email!));
 
     if (existingByEmail) {
-      const [updated] = await db
-        .update(users)
-        .set({
-          authUserId: supabaseUser.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, existingByEmail.id))
-        .returning();
+      const backfilledIdentity = {
+        phone: existingByEmail.phone || signupIdentity.phone,
+        tckn: existingByEmail.tckn || signupIdentity.tckn,
+      };
 
-      logger.debug('auth.app_user_linked', { requestId, userId: updated.id, authUserId: supabaseUser.id });
-      return updated;
+      try {
+        const [updated] = await db
+          .update(users)
+          .set({
+            authUserId: supabaseUser.id,
+            phone: backfilledIdentity.phone,
+            tckn: backfilledIdentity.tckn,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existingByEmail.id))
+          .returning();
+
+        logger.debug('auth.app_user_linked', { requestId, userId: updated.id, authUserId: supabaseUser.id });
+        return updated;
+      } catch (error) {
+        if (isUniqueViolation(error, 'users_phone_unique')) {
+          throw new HttpError(409, 'phone is already linked to another user');
+        }
+
+        throw error;
+      }
     }
 
     const name = userNameFromAuthUser(supabaseUser);
-    const [created] = await db
-      .insert(users)
-      .values({
-        authUserId: supabaseUser.id,
-        firstName: name.firstName,
-        lastName: name.lastName,
-        email: supabaseUser.email!,
-        phone: supabaseUser.phone || null,
-        passwordHash: null,
-        isActive: true,
-        termsOfService: new Date(),
-      })
-      .returning();
 
-    logger.debug('auth.app_user_created', { requestId, userId: created.id, authUserId: supabaseUser.id });
-    return created;
+    try {
+      const [created] = await db
+        .insert(users)
+        .values({
+          authUserId: supabaseUser.id,
+          firstName: name.firstName,
+          lastName: name.lastName,
+          email: supabaseUser.email!,
+          phone: signupIdentity.phone,
+          tckn: signupIdentity.tckn,
+          passwordHash: null,
+          isActive: true,
+          termsOfService: new Date(),
+        })
+        .returning();
+
+      logger.debug('auth.app_user_created', { requestId, userId: created.id, authUserId: supabaseUser.id });
+      return created;
+    } catch (error) {
+      if (isUniqueViolation(error, 'users_phone_unique')) {
+        throw new HttpError(409, 'phone is already linked to another user');
+      }
+
+      throw error;
+    }
   }
 
   private toPublicUser(user: AppUser) {
