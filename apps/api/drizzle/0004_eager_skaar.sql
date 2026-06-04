@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "user_vehicles_user_vehicle_unique" ON "user_vehicles" USING btree ("user_id","vehicle_plate_number");

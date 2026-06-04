@@ -1,16 +1,20 @@
 import { Router } from 'express';
 import { AuthService } from '../services/auth.service';
 import { CatalogService } from '../services/catalog.service';
-import { SessionService } from '../services/session.service';
+import { SessionService, SessionStatus } from '../services/session.service';
 import { TicketService } from '../services/ticket.service';
-import { parsePositiveNumber, parseRequiredNumber, sendError } from '../utils/http';
+import { allowedConnectorTypes, ConnectorType, VehicleService } from '../services/vehicle.service';
+import { HttpError, parseOptionalEnum, parsePositiveNumber, parseRequiredNumber, parseRequiredString, sendError } from '../utils/http';
 import { logger } from '../utils/logger';
+
+const allowedSessionStatuses: SessionStatus[] = ['active', 'completed', 'cancelled'];
 
 export function createMobileRouter(
   authService: AuthService,
   catalogService: CatalogService,
   sessionService: SessionService,
   ticketService: TicketService,
+  vehicleService: VehicleService,
 ): Router {
   const router = Router();
 
@@ -70,7 +74,7 @@ export function createMobileRouter(
   router.get('/sessions', async (req, res) => {
     try {
       const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
-      const status = req.query.status === undefined ? undefined : String(req.query.status);
+      const status = parseOptionalEnum(req.query.status, 'status', allowedSessionStatuses);
       const sessionRows = await sessionService.listSessions({ userId: auth.appUser.id, status });
 
       logger.debug('mobile.sessions_listed', {
@@ -89,8 +93,9 @@ export function createMobileRouter(
   router.post('/sessions', async (req, res) => {
     try {
       const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
-      const plugCode = String(req.body.plugCode ?? '');
-      const session = await sessionService.startSession(auth.appUser.id, plugCode, req.body.vehiclePlateNumber);
+      const plugCode = parseRequiredString(req.body.plugCode, 'plugCode');
+      const vehiclePlateNumber = parseRequiredString(req.body.vehiclePlateNumber, 'vehiclePlateNumber');
+      const session = await sessionService.startSession(auth.appUser.id, plugCode, vehiclePlateNumber);
 
       logger.debug('mobile.session_started', {
         requestId: res.locals.requestId,
@@ -120,6 +125,47 @@ export function createMobileRouter(
       });
 
       res.json({ data: session });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.post('/vehicles', async (req, res) => {
+    try {
+      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
+      const plateNumber = parseRequiredString(req.body.plateNumber, 'plateNumber');
+      const connectorType = parseRequiredString(req.body.connectorType, 'connectorType') as ConnectorType;
+
+      if (!allowedConnectorTypes.includes(connectorType)) {
+        throw new HttpError(400, `connectorType must be one of: ${allowedConnectorTypes.join(', ')}`);
+      }
+
+      const profile = await vehicleService.addVehicle(auth.appUser.id, { plateNumber, connectorType });
+
+      logger.debug('mobile.vehicle_added', {
+        requestId: res.locals.requestId,
+        userId: auth.appUser.id,
+        vehicleCount: profile.vehicles.length,
+      });
+
+      res.status(201).json({ data: profile });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.delete('/vehicles/:plateNumber', async (req, res) => {
+    try {
+      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
+      const profile = await vehicleService.removeVehicle(auth.appUser.id, req.params.plateNumber);
+
+      logger.debug('mobile.vehicle_removed', {
+        requestId: res.locals.requestId,
+        userId: auth.appUser.id,
+        vehicleCount: profile.vehicles.length,
+      });
+
+      res.json({ data: profile });
     } catch (error) {
       sendError(res, error);
     }

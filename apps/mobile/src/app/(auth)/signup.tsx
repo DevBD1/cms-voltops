@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Text, View, Pressable, TextInput } from "react-native";
+import { Text, View, Pressable, TextInput, ActivityIndicator, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "@/lib/api";
 import { getAuthRedirectUrl } from "@/lib/auth-redirect";
 import { supabase } from "@/lib/supabase";
@@ -10,9 +11,17 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [tckn, setTckn] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [canResendConfirmation, setCanResendConfirmation] = useState(false);
+
+  const [isFocusedName, setIsFocusedName] = useState(false);
+  const [isFocusedEmail, setIsFocusedEmail] = useState(false);
+  const [isFocusedPhone, setIsFocusedPhone] = useState(false);
+  const [isFocusedPassword, setIsFocusedPassword] = useState(false);
+  const [isFocusedTckn, setIsFocusedTckn] = useState(false);
 
   async function handleSignup() {
     setIsSubmitting(true);
@@ -29,6 +38,8 @@ export default function Signup() {
         emailRedirectTo,
         data: {
           full_name: name.trim(),
+          phone: phone.trim(),
+          tckn: tckn.trim(),
         },
       },
     });
@@ -87,87 +98,181 @@ export default function Signup() {
   }
 
   return (
-    <View className="flex-1 bg-midnight items-center justify-center p-6">
-      <View className="bg-slate-navy p-8 rounded-[32px] w-full max-w-sm border border-border-slate shadow-2xl space-y-6">
-        <View className="space-y-2 items-center">
-          <Text className="text-white text-3xl font-bold tracking-tight">Create Account</Text>
-          <Text className="text-cyan-glow text-sm font-medium uppercase tracking-wider">Register Station Pilot</Text>
-        </View>
+    <View className="flex-1 bg-midnight relative">
+      {/* Background ambient glow */}
+      <View
+        className="absolute w-[800px] h-[800px] rounded-full opacity-5 blur-[120px]"
+        style={{
+          top: -200,
+          left: -200,
+          backgroundColor: "#2563EB",
+        }}
+      />
 
-        <View className="space-y-4">
-          <View className="space-y-1">
-            <Text className="text-muted text-xs font-semibold uppercase px-1">Operator Alias</Text>
-            <View className="bg-elevated-navy border border-border-slate rounded-2xl p-4">
-              <TextInput 
-                placeholder="Full name"
-                placeholderTextColor="#64748B"
-                className="text-white text-sm"
-                autoCapitalize="words"
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
-          </View>
+      <SafeAreaView className="flex-1 z-10 w-full max-w-md mx-auto px-6">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 24 }} className="space-y-6">
 
-          <View className="space-y-1">
-            <Text className="text-muted text-xs font-semibold uppercase px-1">Email Terminal</Text>
-            <View className="bg-elevated-navy border border-border-slate rounded-2xl p-4">
-              <TextInput 
-                placeholder="Email address"
-                placeholderTextColor="#64748B"
-                className="text-white text-sm"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
-          </View>
-
-          <View className="space-y-1">
-            <Text className="text-muted text-xs font-semibold uppercase px-1">Access Key</Text>
-            <View className="bg-elevated-navy border border-border-slate rounded-2xl p-4">
-              <TextInput 
-                placeholder="••••••••••••"
-                placeholderTextColor="#64748B"
-                className="text-white text-sm"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-          </View>
-        </View>
-
-        <Pressable
-          onPress={handleSignup}
-          disabled={isSubmitting}
-          className="w-full bg-cyan-glow active:bg-cyan-glow/85 py-4 rounded-2xl items-center justify-center shadow-lg shadow-cyan-glow/20"
-        >
-          <Text className="text-midnight font-bold text-base">{isSubmitting ? "Registering" : "Register & Launch"}</Text>
-        </Pressable>
-
-        {message ? <Text className="text-muted text-sm text-center">{message}</Text> : null}
-
-        {canResendConfirmation ? (
-          <Pressable
-            onPress={handleResendConfirmation}
-            disabled={isSubmitting}
-            className="w-full bg-elevated-navy border border-border-slate py-3 rounded-2xl items-center justify-center"
-          >
-            <Text className="text-white font-semibold text-sm">
-              {isSubmitting ? "Sending Confirmation" : "Resend Confirmation Email"}
+          {/* Header titles */}
+          <View className="items-center space-y-2 mb-4">
+            <Text className="text-white text-3xl font-extrabold tracking-tight uppercase" style={{ fontFamily: "Sora" }}>
+              Create Account
             </Text>
-          </Pressable>
-        ) : null}
+            <Text className="text-muted text-sm" style={{ fontFamily: "Inter" }}>
+              Register Station Pilot
+            </Text>
+          </View>
 
-        <View className="flex-row justify-center space-x-1 gap-x-1">
-          <Text className="text-muted text-sm">Registered Pilot?</Text>
-          <Pressable onPress={() => router.push("/(auth)/login")}>
-            <Text className="text-cyan-glow font-bold text-sm">Login</Text>
-          </Pressable>
-        </View>
-      </View>
+          {/* Registration Input Fields */}
+          <View className="space-y-4">
+            {/* Alias name */}
+            <View className="space-y-1.5">
+              <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
+                Operator Alias
+              </Text>
+              <View className={`bg-slate-navy rounded-2xl px-4 py-4 border transition-all ${isFocusedName ? "border-cyan-glow" : "border-border-slate"}`}>
+                <TextInput
+                  placeholder="John Doe"
+                  placeholderTextColor="#64748B"
+                  className="text-white text-sm outline-none"
+                  autoCapitalize="words"
+                  value={name}
+                  onChangeText={setName}
+                  onFocus={() => setIsFocusedName(true)}
+                  onBlur={() => setIsFocusedName(false)}
+                />
+              </View>
+            </View>
+
+            {/* Email Address */}
+            <View className="space-y-1.5">
+              <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
+                Email Address
+              </Text>
+              <View className={`bg-slate-navy rounded-2xl px-4 py-4 border transition-all ${isFocusedEmail ? "border-cyan-glow" : "border-border-slate"}`}>
+                <TextInput
+                  placeholder="pilot@voltops.io"
+                  placeholderTextColor="#64748B"
+                  className="text-white text-sm outline-none"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setIsFocusedEmail(true)}
+                  onBlur={() => setIsFocusedEmail(false)}
+                />
+              </View>
+            </View>
+
+            {/* Phone Number */}
+            <View className="space-y-1.5">
+              <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
+                Phone Number
+              </Text>
+              <View className={`bg-slate-navy rounded-2xl px-4 py-4 border transition-all ${isFocusedPhone ? "border-cyan-glow" : "border-border-slate"}`}>
+                <TextInput
+                  placeholder="+1 (555) 000-0000"
+                  placeholderTextColor="#64748B"
+                  className="text-white text-sm outline-none"
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
+                  onFocus={() => setIsFocusedPhone(true)}
+                  onBlur={() => setIsFocusedPhone(false)}
+                />
+              </View>
+            </View>
+
+            {/* Password */}
+            <View className="space-y-1.5">
+              <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
+                Access Key
+              </Text>
+              <View className={`bg-slate-navy rounded-2xl px-4 py-4 border transition-all ${isFocusedPassword ? "border-cyan-glow" : "border-border-slate"}`}>
+                <TextInput
+                  placeholder="••••••••"
+                  placeholderTextColor="#64748B"
+                  className="text-white text-sm outline-none"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setIsFocusedPassword(true)}
+                  onBlur={() => setIsFocusedPassword(false)}
+                />
+              </View>
+            </View>
+
+            {/* Optional TCKN ID */}
+            <View className="space-y-1.5">
+              <View className="flex-row justify-between items-center px-1">
+                <Text className="text-muted text-[10px] font-bold tracking-widest uppercase" style={{ fontFamily: "Inter" }}>
+                  TCKN Verification Number
+                </Text>
+                <Text className="text-muted/40 text-[9px] italic" style={{ fontFamily: "Inter" }}>OPTIONAL</Text>
+              </View>
+              <View className={`bg-slate-navy rounded-2xl px-4 py-4 border transition-all ${isFocusedTckn ? "border-cyan-glow" : "border-border-slate"}`}>
+                <TextInput
+                  placeholder="11-digit national ID"
+                  placeholderTextColor="#64748B"
+                  className="text-white text-sm outline-none"
+                  keyboardType="number-pad"
+                  maxLength={11}
+                  value={tckn}
+                  onChangeText={setTckn}
+                  onFocus={() => setIsFocusedTckn(true)}
+                  onBlur={() => setIsFocusedTckn(false)}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* CTA & Actions */}
+          <View className="space-y-4 pt-4">
+            <Pressable
+              onPress={handleSignup}
+              disabled={isSubmitting}
+              className="w-full py-5 bg-white rounded-full items-center justify-center active:scale-[0.98] transition-transform shadow-lg"
+              style={{
+                shadowColor: "#FFF",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.15,
+                shadowRadius: 10,
+                elevation: 6,
+              }}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#0A0E1A" size="small" />
+              ) : (
+                <View className="flex-row items-center justify-center space-x-2 gap-x-2">
+                  <Text className="text-midnight font-extrabold text-xs uppercase tracking-widest" style={{ fontFamily: "Sora" }}>
+                    Register & Launch
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+
+            {message ? <Text className="text-muted text-xs text-center leading-5 px-2" style={{ fontFamily: "Inter" }}>{message}</Text> : null}
+
+            {canResendConfirmation ? (
+              <Pressable
+                onPress={handleResendConfirmation}
+                disabled={isSubmitting}
+                className="w-full bg-elevated-navy border border-border-slate py-4 rounded-2xl items-center justify-center active:bg-elevated-navy/80"
+              >
+                <Text className="text-white font-semibold text-sm" style={{ fontFamily: "Inter" }}>
+                  {isSubmitting ? "Sending Confirmation" : "Resend Confirmation Email"}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <View className="flex-row justify-center space-x-1.5 gap-x-1.5 py-2">
+              <Text className="text-muted text-sm" style={{ fontFamily: "Inter" }}>Registered Pilot?</Text>
+              <Pressable onPress={() => router.push("/(auth)/login")}>
+                <Text className="text-cyan-glow font-bold text-sm" style={{ fontFamily: "Inter" }}>Login</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
