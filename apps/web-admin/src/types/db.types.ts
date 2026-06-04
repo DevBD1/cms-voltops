@@ -41,7 +41,6 @@ export type SocketStatus = PlugStatus;
 export type DeviceStatus = 'ONLINE' | 'OFFLINE' | 'MAINTENANCE';
 
 // ─── API response shapes ──────────────────────────────────────────────────────
-// These match exactly what the admin routes return (after status normalisation).
 
 /** User record from GET /api/admin/users */
 export interface User {

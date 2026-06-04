@@ -126,9 +126,7 @@ export function EmployeesView() {
 
   const activeCount = employees.filter((e) => e.status === 'active').length;
 
-  // Users who are not yet employees (no employee record)
-  const employeeUserIds = new Set(employees.map((e) => e.id)); // NOTE: this is employee.id not user.id
-  // We need to filter users who don't have an active employee — use email matching
+  const employeeUserIds = new Set(employees.map((e) => e.id));
   const employeeEmails = new Set(employees.map((e) => e.email));
   const nonEmployeeUsers = users.filter((u) => !employeeEmails.has(u.email));
 

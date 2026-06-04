@@ -113,16 +113,13 @@ export function DevicesView() {
   if (loading) return <p className="text-sm text-slate-500">Yükleniyor…</p>;
   if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
 
-  // Group plugs by station
   const byStation = plugs.reduce<Record<string, Plug[]>>((acc, plug) => {
     (acc[plug.stationCode] ??= []).push(plug);
     return acc;
   }, {});
 
-  // Build station map for quick lookup
   const stationMap = Object.fromEntries(stations.map((s) => [s.stationCode, s]));
 
-  // All station codes: stations that have plugs OR exist in the station list
   const allCodes = [
     ...new Set([...stations.map((s) => s.stationCode), ...Object.keys(byStation)]),
   ];

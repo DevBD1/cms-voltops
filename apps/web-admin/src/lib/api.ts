@@ -57,7 +57,6 @@ async function request<T>(base: string, path: string, init: RequestInit = {}): P
     throw new ApiError(res.status, (body as { error?: string }).error ?? 'İstek başarısız.');
   }
 
-  // Unwrap { data: ... } envelope if present, otherwise return body as-is.
   if (body && typeof body === 'object' && 'data' in (body as object)) {
     return (body as { data: T }).data;
   }
@@ -201,7 +200,6 @@ export const usersApi = {
     email: string;
     phone?: string;
   }) => admin<User>('/users', { method: 'POST', body: JSON.stringify(data) }),
-  // Role is intentionally excluded — privilege escalation must go through Supabase/employees.
   update: (id: number, data: { firstName?: string; lastName?: string; phone?: string | null; isActive?: boolean }) =>
     admin<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };

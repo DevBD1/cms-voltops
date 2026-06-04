@@ -52,8 +52,6 @@ export function getSession(): AuthSession | null {
 export async function login(email: string, password: string): Promise<AuthSession> {
   const data = await authApi.login(email, password);
 
-  // Validate the role before trusting it — guards against future schema drift
-  // or a misconfigured environment returning an unexpected role string.
   if (!ALL_ROLES.includes(data.user.role as UserRole)) {
     throw new ApiError(500, 'Sunucudan geçersiz rol bilgisi alındı.');
   }
@@ -74,7 +72,6 @@ export async function login(email: string, password: string): Promise<AuthSessio
 
 export function clearSession(): void {
   localStorage.removeItem(AUTH_KEY);
-  // Also sign out from Supabase so the access token is revoked server-side.
   supabase.auth.signOut().catch(() => {/* fire-and-forget */});
 }
 

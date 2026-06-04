@@ -42,7 +42,6 @@ function nameFromSupabaseUser(supabaseUser: SupabaseUser) {
  * Creates it automatically on first login — mirrors AuthService.findOrCreateUser.
  */
 async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
-  // 1. Try by Supabase Auth UUID (fastest path after first login)
   const [byAuthId] = await db
     .select()
     .from(users)
@@ -50,7 +49,6 @@ async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
     .limit(1);
   if (byAuthId) return byAuthId;
 
-  // 2. Try by email (user may exist from a previous auth method)
   const [byEmail] = await db
     .select()
     .from(users)
@@ -58,7 +56,6 @@ async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
     .limit(1);
 
   if (byEmail) {
-    // Link the Supabase UUID so future lookups hit path 1
     const [linked] = await db
       .update(users)
       .set({ authUserId: supabaseUser.id, updatedAt: new Date() })
@@ -67,7 +64,6 @@ async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
     return linked;
   }
 
-  // 3. First-ever login — create the row
   const { firstName, lastName } = nameFromSupabaseUser(supabaseUser);
   const [created] = await db
     .insert(users)
@@ -130,7 +126,6 @@ router.post('/login', async (req, res) => {
       return;
     }
 
-    // Auto-creates public.users row on first login
     const appUser = await findOrCreateAppUser(data.user);
 
     if (!appUser.isActive) {

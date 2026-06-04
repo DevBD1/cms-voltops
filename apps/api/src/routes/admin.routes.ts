@@ -686,7 +686,6 @@ export function createAdminRouter(
           currency: receipts.currency,
           issuedAt: receipts.issuedAt,
           createdAt: receipts.createdAt,
-          // session fields for context
           plugCode: sessions.plugCode,
           energyKwh: sessions.energyKwh,
         })
@@ -895,7 +894,6 @@ export function createAdminRouter(
     try {
       const status = req.query.status === undefined ? undefined : String(req.query.status);
 
-      // Enrich with userFullName and stationName via joins
       const rows = await db
         .select({
           id: ticketsTable.id,

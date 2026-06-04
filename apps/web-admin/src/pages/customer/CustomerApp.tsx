@@ -10,7 +10,6 @@ import { SupportView } from './views/SupportView';
 
 export default function CustomerApp() {
   const navigate = useNavigate();
-  // Read localStorage once; session cannot change while already authenticated
   const [session] = useState(getSession);
   const [tab, setTab] = useState<CustomerTab>('home');
 

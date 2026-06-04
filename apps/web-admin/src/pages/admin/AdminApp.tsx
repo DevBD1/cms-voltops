@@ -18,7 +18,6 @@ import { UsersView } from './views/UsersView';
 
 export default function AdminApp() {
   const navigate = useNavigate();
-  // Read localStorage once; session cannot change while already authenticated
   const [session] = useState(getSession);
   const [tab, setTab] = useState<AdminTab>('overview');
   const [faultyPlugCount, setFaultyPlugCount] = useState(0);
@@ -28,7 +27,6 @@ export default function AdminApp() {
     : 'Kullanıcı';
   const roleLabel = session ? formatRole(session.user.role) : '';
 
-  // Fetch faulty plug count for the alert badge in the header
   useEffect(() => {
     plugsApi
       .list()
