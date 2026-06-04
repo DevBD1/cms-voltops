@@ -41,8 +41,8 @@ export function HomeView({ onNavigate }: HomeViewProps) {
       </section>
 
       {activeSession ? (
-        <article className="overflow-hidden rounded-lg border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white dark:border-amber-900/50 dark:from-amber-950/30 dark:to-[#111111]">
-          <div className="border-b border-amber-200/60 px-6 py-4 dark:border-amber-900/40">
+        <article className="overflow-hidden rounded-xl border border-amber-200 bg-white dark:border-amber-900/40 dark:bg-night-raised">
+          <div className="border-b border-amber-200/60 px-6 py-4 dark:border-amber-900/30">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                 Aktif şarj
@@ -60,14 +60,14 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             </p>
           </div>
           {activeSession.energyKwh != null && activeSession.totalPrice != null && (
-            <div className="grid grid-cols-2 gap-px bg-amber-200/60 dark:bg-amber-900/40">
-              <div className="bg-white px-6 py-4 dark:bg-[#111111]">
+            <div className="grid grid-cols-2 gap-px bg-amber-200/50 dark:bg-amber-900/30">
+              <div className="bg-white px-6 py-4 dark:bg-night-raised">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Enerji</p>
                 <p className="mt-1 font-mono text-xl font-semibold text-slate-900 dark:text-white">
                   {formatKwh(activeSession.energyKwh)}
                 </p>
               </div>
-              <div className="bg-white px-6 py-4 dark:bg-[#111111]">
+              <div className="bg-white px-6 py-4 dark:bg-night-raised">
                 <p className="text-xs text-slate-500 dark:text-slate-400">Tahmini Tutar</p>
                 <p className="mt-1 font-mono text-xl font-semibold text-slate-900 dark:text-white">
                   {formatCurrency(parseFloat(activeSession.totalPrice))}
@@ -77,14 +77,14 @@ export function HomeView({ onNavigate }: HomeViewProps) {
           )}
         </article>
       ) : (
-        <article className="rounded-lg border border-slate-200 bg-white p-8 text-center dark:border-slate-800 dark:bg-[#111111]">
+        <article className="rounded-xl border border-slate-200/80 bg-white p-8 text-center dark:border-white/7 dark:bg-night-raised">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Şu an aktif şarj oturumunuz yok.
           </p>
           <button
             type="button"
             onClick={() => onNavigate('stations')}
-            className="mt-4 inline-flex rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
+            className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-600"
           >
             İstasyonları gör
           </button>
@@ -109,7 +109,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             {recentCompleted.map((session) => (
               <li
                 key={session.id}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#111111]"
+                className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white px-4 py-3 dark:border-white/7 dark:bg-night-raised"
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-slate-900 dark:text-white">

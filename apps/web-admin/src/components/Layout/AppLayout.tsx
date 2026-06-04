@@ -27,8 +27,16 @@ export function AppLayout({
   onLogout,
 }: AppLayoutProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-[#FAFAFA] text-ink dark:bg-[#0A0A0A] dark:text-white">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0A0A0A]">
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-slate-50 text-ink dark:bg-night dark:text-white">
+
+      {/* Atmospheric glow — visible in dark mode only */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-72 opacity-0 dark:opacity-100 bg-[radial-gradient(ellipse_70%_35%_at_50%_0%,rgba(37,99,235,0.1),transparent)]"
+      />
+
+      {/* ── Header — frosted glass ────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/85 shadow-sm backdrop-blur-xl dark:border-white/[0.07] dark:bg-night/80 dark:shadow-none">
         <div className="mx-auto flex h-14 max-w-lg items-center justify-between px-4 sm:max-w-2xl lg:max-w-4xl">
           <div className="min-w-0">
             <p className="text-lg font-bold tracking-tight text-brand-600 dark:text-brand-400">VoltOps</p>
@@ -39,7 +47,7 @@ export function AppLayout({
             <button
               type="button"
               onClick={onLogout}
-              className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-[#FAFAFA] dark:border-slate-700 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-900"
+              className="rounded-md border border-slate-200/80 bg-white/60 px-2.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/9"
             >
               Çıkış
             </button>
@@ -47,15 +55,16 @@ export function AppLayout({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-6 pb-28 sm:max-w-2xl lg:max-w-4xl">
+      <main className="relative z-10 mx-auto w-full max-w-lg flex-1 px-4 py-6 pb-28 sm:max-w-2xl lg:max-w-4xl">
         {children}
       </main>
 
+      {/* ── Bottom nav — frosted glass + active pill + top indicator ──── */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0A0A0A]"
+        className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/70 bg-white/85 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.06)] dark:border-white/[0.07] dark:bg-night/80 dark:shadow-[0_-8px_32px_rgba(0,0,0,0.55)]"
         aria-label="Ana navigasyon"
       >
-        <div className="mx-auto flex max-w-lg justify-around px-1 py-2 sm:max-w-2xl lg:max-w-4xl">
+        <div className="mx-auto flex max-w-lg justify-around px-2 py-2 sm:max-w-2xl lg:max-w-4xl">
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -64,12 +73,18 @@ export function AppLayout({
                 type="button"
                 onClick={() => onTabChange(tab.id)}
                 aria-current={active ? 'page' : undefined}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[10px] font-medium transition-colors sm:text-xs ${
+                className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition-all duration-200 sm:text-xs ${
                   active
-                    ? 'text-brand-600 dark:text-brand-400'
-                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                    ? 'bg-brand-500/10 text-brand-600 dark:bg-brand-400/13 dark:text-brand-400'
+                    : 'text-slate-400 hover:text-slate-600 dark:text-slate-600 dark:hover:text-slate-400'
                 }`}
               >
+                {/* top indicator bar */}
+                <span
+                  className={`absolute -top-px left-1/2 h-[2px] -translate-x-1/2 rounded-full bg-brand-500 transition-all duration-200 dark:bg-brand-400 ${
+                    active ? 'w-6 opacity-100' : 'w-0 opacity-0'
+                  }`}
+                />
                 {tab.icon(active)}
                 <span className="truncate">{tab.label}</span>
               </button>

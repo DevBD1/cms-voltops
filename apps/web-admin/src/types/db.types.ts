@@ -153,12 +153,56 @@ export interface Ticket {
   userFullName: string;
   stationCode: string | null;
   stationName: string | null;
+  /** ID of the employee assigned to this ticket, or null if unassigned. */
+  assignedEmployeeId: number | null;
   title: string;
   description: string;
   priority: TicketPriority;
   status: TicketStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Employee record — GET /api/admin/employees */
+export interface Employee {
+  id: number;
+  employeeCode: string;
+  department: string;
+  jobTitle: string;
+  status: string;
+  fullName: string;
+  email: string;
+}
+
+/** Employee detail with assignments — GET /api/admin/employees/:id */
+export interface EmployeeDetail extends Employee {
+  hireDate: string | null;
+  assignedStations: {
+    stationCode: string;
+    stationName: string;
+    assignmentRole: string;
+    assignedAt: string;
+  }[];
+  assignedMaintenance: {
+    id: number;
+    stationCode: string;
+    stationName: string | null;
+    plugCode: string | null;
+    maintenanceType: string;
+    description: string;
+    status: string;
+    scheduledDate: string | null;
+    completedDate: string | null;
+  }[];
+  assignedTickets: {
+    id: number;
+    title: string;
+    status: string;
+    priority: string;
+    stationName: string | null;
+    userFullName: string;
+    createdAt: string;
+  }[];
 }
 
 /** Stored in localStorage after successful login */

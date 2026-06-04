@@ -11,6 +11,7 @@ import { plugsApi } from '../../lib/api';
 import { OverviewView } from './views/OverviewView';
 import { StationsView } from './views/StationsView';
 import { DevicesView } from './views/DevicesView';
+import { EmployeesView } from './views/EmployeesView';
 import { MaintenanceView } from './views/MaintenanceView';
 import { SupportView } from './views/SupportView';
 import { UsersView } from './views/UsersView';
@@ -58,6 +59,7 @@ export default function AdminApp() {
       {tab === 'maintenance' && <MaintenanceView />}
       {tab === 'support' && <SupportView />}
       {tab === 'users' && <UsersView />}
+      {tab === 'employees' && <EmployeesView />}
     </AdminLayout>
   );
 }

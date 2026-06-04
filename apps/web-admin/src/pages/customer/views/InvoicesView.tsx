@@ -4,10 +4,6 @@ import { receiptsApi } from '../../../lib/api';
 import { formatCurrency, formatDate } from '../../../lib/formatters';
 import type { Receipt } from '../../../types/db.types';
 
-const PAYMENT_LABELS: Record<string, string> = {
-  CREDIT_CARD: 'Kredi kartı',
-  WALLET: 'Cüzdan',
-};
 
 export function InvoicesView() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -40,8 +36,8 @@ export function InvoicesView() {
         <ul className="space-y-4">
           {receipts.map((receipt) => (
             <li
-              key={receipt.id}
-              className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#111111]"
+              key={receipt.receiptNo}
+              className="rounded-xl border border-slate-200/80 bg-white p-5 dark:border-white/7 dark:bg-night-raised"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -52,15 +48,14 @@ export function InvoicesView() {
                     {receipt.stationName}
                   </p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {formatDate(receipt.issuedAt)} ·{' '}
-                    {PAYMENT_LABELS[receipt.paymentMethod] ?? receipt.paymentMethod}
+                    {formatDate(receipt.issuedAt)}
                   </p>
                 </div>
                 <p className="font-mono text-lg font-semibold text-slate-900 dark:text-white">
                   {formatCurrency(parseFloat(receipt.totalAmount))}
                 </p>
               </div>
-              <div className="mt-4 flex gap-6 border-t border-slate-100 pt-4 text-xs dark:border-slate-800">
+              <div className="mt-4 flex gap-6 border-t border-slate-100 pt-4 text-xs dark:border-white/6">
                 <div>
                   <span className="text-slate-500 dark:text-slate-400">KDV </span>
                   <span className="font-mono text-slate-700 dark:text-slate-300">

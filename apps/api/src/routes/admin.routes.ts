@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { receipts, sessions, stations, tickets as ticketsTable, users } from '../db/schema';
+import { employees as employeesTable, maintenance as maintenanceTable, plugs as plugsTable, receipts, sessions, stationEmployees as stationEmployeesTable, stations, tickets as ticketsTable, users } from '../db/schema';
 import { AuthService } from '../services/auth.service';
 import { CatalogService, deriveCurrentType, type StationSummary, type PlugDetails } from '../services/catalog.service';
 import { MaintenanceService } from '../services/maintenance.service';
@@ -39,6 +39,27 @@ function normalizeSessionStatus(s: string): 'ACTIVE' | 'COMPLETED' | 'FAILED' {
     failed: 'FAILED',
   };
   return map[s] ?? 'ACTIVE';
+}
+
+function normalizeTicketStatus(s: string): string {
+  const map: Record<string, string> = {
+    open: 'OPEN',
+    in_progress: 'IN_PROGRESS',
+    resolved: 'RESOLVED',
+    closed: 'CLOSED',
+  };
+  return map[s?.toLowerCase()] ?? s.toUpperCase();
+}
+
+function normalizeTicketPriority(s: string): string {
+  const map: Record<string, string> = {
+    low: 'LOW',
+    normal: 'MEDIUM',
+    medium: 'MEDIUM',
+    high: 'HIGH',
+    critical: 'CRITICAL',
+  };
+  return map[s?.toLowerCase()] ?? s.toUpperCase();
 }
 
 function toWebStation(s: StationSummary) {
@@ -229,6 +250,53 @@ export function createAdminRouter(
     }
   });
 
+  router.delete('/stations/:stationCode', async (req, res) => {
+    try {
+      const { stationCode } = req.params;
+
+      // Block if station has plugs (sessions cascade through plugs)
+      const stationPlugs = await catalogService.listPlugs({ stationCode });
+      if (stationPlugs.length > 0) {
+        res.status(409).json({
+          error: `Bu istasyona bağlı ${stationPlugs.length} soket bulunuyor. Önce soketleri siliniz.`,
+        });
+        return;
+      }
+
+      // Block if station has maintenance records (stationCode is NOT NULL there)
+      const [hasMaint] = await db
+        .select({ id: maintenanceTable.id })
+        .from(maintenanceTable)
+        .where(eq(maintenanceTable.stationCode, stationCode))
+        .limit(1);
+      if (hasMaint) {
+        res.status(409).json({
+          error: 'Bu istasyona ait bakım kayıtları var. İstasyonu silmek yerine durum değiştiriniz.',
+        });
+        return;
+      }
+
+      // Auto-clean station_employees and nullify ticket references
+      await db.delete(stationEmployeesTable).where(eq(stationEmployeesTable.stationCode, stationCode));
+      await db.update(ticketsTable).set({ stationCode: null }).where(eq(ticketsTable.stationCode, stationCode));
+
+      const [deleted] = await db
+        .delete(stations)
+        .where(eq(stations.stationCode, stationCode))
+        .returning();
+
+      if (!deleted) {
+        res.status(404).json({ error: 'İstasyon bulunamadı.' });
+        return;
+      }
+
+      logger.debug('admin.station_deleted', { requestId: res.locals.requestId, stationCode });
+      res.json({ data: { stationCode } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   router.patch('/stations/:stationCode/status', async (req, res) => {
     try {
       const status = String(req.body.status ?? '').toLowerCase() as RawStationStatus;
@@ -239,6 +307,243 @@ export function createAdminRouter(
       const station = await catalogService.setStationStatus(req.params.stationCode, status);
       logger.debug('admin.station_status_updated', { requestId: res.locals.requestId, stationCode: req.params.stationCode, status });
       res.json({ data: toWebStation(station) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // ── Employees (read-only list used for assignment dropdowns) ─────────────
+  router.get('/employees', async (_req, res) => {
+    try {
+      const rows = await db
+        .select({
+          id: employeesTable.id,
+          employeeCode: employeesTable.employeeCode,
+          department: employeesTable.department,
+          jobTitle: employeesTable.jobTitle,
+          status: employeesTable.status,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        })
+        .from(employeesTable)
+        .innerJoin(users, eq(employeesTable.userId, users.id))
+        .orderBy(users.lastName, users.firstName);
+
+      res.json({
+        data: rows.map((e) => ({
+          id: e.id,
+          employeeCode: e.employeeCode,
+          department: e.department,
+          jobTitle: e.jobTitle,
+          status: e.status,
+          fullName: `${e.firstName} ${e.lastName}`.trim(),
+          email: e.email,
+        })),
+      });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.get('/employees/:employeeId', async (req, res) => {
+    try {
+      const employeeId = parseRequiredNumber(req.params.employeeId, 'employeeId');
+
+      const [emp] = await db
+        .select({
+          id: employeesTable.id,
+          employeeCode: employeesTable.employeeCode,
+          department: employeesTable.department,
+          jobTitle: employeesTable.jobTitle,
+          status: employeesTable.status,
+          hireDate: employeesTable.hireDate,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        })
+        .from(employeesTable)
+        .innerJoin(users, eq(employeesTable.userId, users.id))
+        .where(eq(employeesTable.id, employeeId));
+
+      if (!emp) {
+        res.status(404).json({ error: 'Çalışan bulunamadı.' });
+        return;
+      }
+
+      const [stationAssignments, maintAssignments, ticketAssignments] = await Promise.all([
+        db.select({
+          stationCode: stationEmployeesTable.stationCode,
+          stationName: stations.name,
+          assignmentRole: stationEmployeesTable.assignmentRole,
+          assignedAt: stationEmployeesTable.assignedAt,
+        })
+          .from(stationEmployeesTable)
+          .innerJoin(stations, eq(stationEmployeesTable.stationCode, stations.stationCode))
+          .where(eq(stationEmployeesTable.employeeId, employeeId)),
+
+        db.select({
+          id: maintenanceTable.id,
+          stationCode: maintenanceTable.stationCode,
+          stationName: stations.name,
+          plugCode: maintenanceTable.plugCode,
+          maintenanceType: maintenanceTable.maintenanceType,
+          description: maintenanceTable.description,
+          status: maintenanceTable.status,
+          scheduledDate: maintenanceTable.scheduledDate,
+          completedDate: maintenanceTable.completedDate,
+        })
+          .from(maintenanceTable)
+          .leftJoin(stations, eq(maintenanceTable.stationCode, stations.stationCode))
+          .where(eq(maintenanceTable.employeeId, employeeId))
+          .orderBy(maintenanceTable.scheduledDate),
+
+        db.select({
+          id: ticketsTable.id,
+          title: ticketsTable.title,
+          status: ticketsTable.status,
+          priority: ticketsTable.priority,
+          stationName: stations.name,
+          userFirstName: users.firstName,
+          userLastName: users.lastName,
+          createdAt: ticketsTable.createdAt,
+        })
+          .from(ticketsTable)
+          .innerJoin(users, eq(ticketsTable.userId, users.id))
+          .leftJoin(stations, eq(ticketsTable.stationCode, stations.stationCode))
+          .where(eq(ticketsTable.assignedEmployeeId, employeeId))
+          .orderBy(ticketsTable.createdAt),
+      ]);
+
+      res.json({
+        data: {
+          id: emp.id,
+          employeeCode: emp.employeeCode,
+          department: emp.department,
+          jobTitle: emp.jobTitle,
+          status: emp.status,
+          hireDate: emp.hireDate,
+          fullName: `${emp.firstName} ${emp.lastName}`.trim(),
+          email: emp.email,
+          assignedStations: stationAssignments.map((s) => ({
+            stationCode: s.stationCode,
+            stationName: s.stationName,
+            assignmentRole: s.assignmentRole,
+            assignedAt: s.assignedAt instanceof Date ? s.assignedAt.toISOString() : s.assignedAt,
+          })),
+          assignedMaintenance: maintAssignments.map((m) => ({
+            id: m.id,
+            stationCode: m.stationCode,
+            stationName: m.stationName ?? null,
+            plugCode: m.plugCode ?? null,
+            maintenanceType: m.maintenanceType,
+            description: m.description,
+            status: m.status,
+            scheduledDate: m.scheduledDate ?? null,
+            completedDate: m.completedDate ?? null,
+          })),
+          assignedTickets: ticketAssignments.map((t) => ({
+            id: t.id,
+            title: t.title,
+            status: normalizeTicketStatus(t.status),
+            priority: normalizeTicketPriority(t.priority),
+            stationName: t.stationName ?? null,
+            userFullName: `${t.userFirstName ?? ''} ${t.userLastName ?? ''}`.trim() || 'Unknown',
+            createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : t.createdAt,
+          })),
+        },
+      });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.post('/employees', async (req, res) => {
+    try {
+      const { userId, employeeCode, department, jobTitle, hireDate } = req.body as {
+        userId?: number;
+        employeeCode?: string;
+        department?: string;
+        jobTitle?: string;
+        hireDate?: string;
+      };
+
+      if (!userId || !employeeCode || !department || !jobTitle || !hireDate) {
+        res.status(400).json({
+          error: 'userId, employeeCode, department, jobTitle ve hireDate gereklidir.',
+        });
+        return;
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (!user) {
+        res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+        return;
+      }
+
+      // If employee record already exists, reactivate it
+      const [existing] = await db
+        .select()
+        .from(employeesTable)
+        .where(eq(employeesTable.userId, userId))
+        .limit(1);
+
+      if (existing) {
+        if (existing.status === 'active') {
+          res.status(409).json({ error: 'Bu kullanıcı zaten aktif bir çalışan.' });
+          return;
+        }
+        const [reactivated] = await db
+          .update(employeesTable)
+          .set({ status: 'active', department, jobTitle, updatedAt: new Date() })
+          .where(eq(employeesTable.userId, userId))
+          .returning();
+        logger.debug('admin.employee_reactivated', { requestId: res.locals.requestId, employeeId: reactivated.id });
+        res.json({ data: { ...reactivated, fullName: `${user.firstName} ${user.lastName}`.trim(), email: user.email } });
+        return;
+      }
+
+      const [created] = await db
+        .insert(employeesTable)
+        .values({ userId, employeeCode, department, jobTitle, hireDate, status: 'active' })
+        .returning();
+
+      logger.debug('admin.employee_created', { requestId: res.locals.requestId, employeeId: created.id });
+      res.status(201).json({ data: { ...created, fullName: `${user.firstName} ${user.lastName}`.trim(), email: user.email } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.patch('/employees/:employeeId', async (req, res) => {
+    try {
+      const employeeId = parseRequiredNumber(req.params.employeeId, 'employeeId');
+      const { status, department, jobTitle } = req.body as {
+        status?: string;
+        department?: string;
+        jobTitle?: string;
+      };
+
+      const updateData: Partial<typeof employeesTable.$inferInsert> = { updatedAt: new Date() };
+      if (status !== undefined) updateData.status = status;
+      if (department !== undefined) updateData.department = department;
+      if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+
+      const [updated] = await db
+        .update(employeesTable)
+        .set(updateData)
+        .where(eq(employeesTable.id, employeeId))
+        .returning();
+
+      if (!updated) {
+        res.status(404).json({ error: 'Çalışan bulunamadı.' });
+        return;
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, updated.userId)).limit(1);
+
+      logger.debug('admin.employee_updated', { requestId: res.locals.requestId, employeeId });
+      res.json({ data: { ...updated, fullName: user ? `${user.firstName} ${user.lastName}`.trim() : '', email: user?.email ?? '' } });
     } catch (error) {
       sendError(res, error);
     }
@@ -275,6 +580,40 @@ export function createAdminRouter(
       const plug = await catalogService.setPlugStatus(req.params.plugCode, raw);
       logger.debug('admin.plug_status_updated', { requestId: res.locals.requestId, plugCode: req.params.plugCode, status: raw });
       res.json({ data: toWebPlug(plug) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.post('/plugs', async (req, res) => {
+    try {
+      const { plugCode, stationCode, plugType, powerKw } = req.body as {
+        plugCode?: string;
+        stationCode?: string;
+        plugType?: string;
+        powerKw?: number | string;
+      };
+
+      if (!plugCode || !stationCode || !plugType || powerKw === undefined) {
+        res.status(400).json({ error: 'plugCode, stationCode, plugType ve powerKw gereklidir.' });
+        return;
+      }
+
+      await db.insert(plugsTable).values({
+        plugCode: plugCode.trim(),
+        stationCode,
+        plugType,
+        powerKw: String(powerKw),
+        currentType: deriveCurrentType(plugType),
+        status: 'available',
+      });
+
+      const plugs = await catalogService.listPlugs({ stationCode });
+      const created = plugs.find((p) => p.plugCode === plugCode.trim());
+      if (!created) throw new Error('Plug not found after creation');
+
+      logger.debug('admin.plug_created', { requestId: res.locals.requestId, plugCode: plugCode.trim() });
+      res.status(201).json({ data: toWebPlug(created) });
     } catch (error) {
       sendError(res, error);
     }
@@ -565,6 +904,7 @@ export function createAdminRouter(
           userLastName: users.lastName,
           stationCode: ticketsTable.stationCode,
           stationName: stations.name,
+          assignedEmployeeId: ticketsTable.assignedEmployeeId,
           title: ticketsTable.title,
           description: ticketsTable.description,
           priority: ticketsTable.priority,
@@ -584,10 +924,11 @@ export function createAdminRouter(
         userFullName: `${r.userFirstName ?? ''} ${r.userLastName ?? ''}`.trim() || 'Unknown',
         stationCode: r.stationCode,
         stationName: r.stationName ?? null,
+        assignedEmployeeId: r.assignedEmployeeId ?? null,
         title: r.title,
         description: r.description,
-        priority: r.priority,
-        status: r.status,
+        priority: normalizeTicketPriority(r.priority),
+        status: normalizeTicketStatus(r.status),
         createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
         updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
       }));

@@ -33,28 +33,22 @@ export function HistoryView() {
       ) : sessions.length === 0 ? (
         <EmptyState message="Henüz tamamlanmış şarj oturumunuz yok." />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-white/7">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
+            <thead className="border-b border-slate-200/80 bg-slate-100/60 dark:border-white/7 dark:bg-white/4">
               <tr>
-                <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
-                  İstasyon
-                </th>
-                <th className="hidden px-4 py-3 font-medium text-slate-600 sm:table-cell dark:text-slate-400">
-                  Tarih
-                </th>
+                <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">İstasyon</th>
+                <th className="hidden px-4 py-3 font-medium text-slate-600 sm:table-cell dark:text-slate-400">Tarih</th>
                 <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">kWh</th>
                 <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">Tutar</th>
                 <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">Durum</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-[#111111]">
+            <tbody className="divide-y divide-slate-200/80 bg-white dark:divide-white/6 dark:bg-night-raised">
               {sessions.map((session) => (
                 <tr key={session.id}>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-900 dark:text-white">
-                      {session.stationName}
-                    </p>
+                    <p className="font-medium text-slate-900 dark:text-white">{session.stationName}</p>
                     <p className="mt-0.5 font-mono text-xs text-slate-500 sm:hidden dark:text-slate-400">
                       {formatDateTime(session.startedAt)}
                     </p>
@@ -66,9 +60,7 @@ export function HistoryView() {
                     {formatKwh(session.energyKwh)}
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-900 dark:text-white">
-                    {session.totalPrice != null
-                      ? formatCurrency(parseFloat(session.totalPrice))
-                      : '—'}
+                    {session.totalPrice != null ? formatCurrency(parseFloat(session.totalPrice)) : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <SessionStatusBadge status={session.status} />

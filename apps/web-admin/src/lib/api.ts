@@ -102,6 +102,8 @@ export const authApi = {
 // ─── Stations ─────────────────────────────────────────────────────────────────
 
 import type {
+  Employee,
+  EmployeeDetail,
   MaintenanceRecord,
   Plug,
   PlugStatus,
@@ -125,19 +127,46 @@ export const stationsApi = {
     latitude: number;
     longitude: number;
   }) => admin<Station>('/stations', { method: 'POST', body: JSON.stringify(data) }),
-  update: (stationCode: string, data: Partial<Pick<Station, 'name' | 'city' | 'district' | 'latitude' | 'longitude' | 'status'>>) =>
+  update: (stationCode: string, data: Partial<Pick<Station, 'name' | 'city' | 'district'>> & { latitude?: number; longitude?: number }) =>
     admin<Station>(`/stations/${stationCode}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  /** Change station operational status using raw DB values. */
+  setStatus: (stationCode: string, status: 'active' | 'maintenance' | 'offline') =>
+    admin<Station>(`/stations/${stationCode}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  /** Permanently delete a station. Returns 409 if plugs or maintenance records exist. */
+  delete: (stationCode: string) =>
+    admin<{ stationCode: string }>(`/stations/${stationCode}`, { method: 'DELETE' }),
 };
 
 // ─── Plugs ────────────────────────────────────────────────────────────────────
+
+/** Maps normalised PlugStatus → raw DB value expected by the API. */
+const PLUG_STATUS_RAW: Record<PlugStatus, string> = {
+  AVAILABLE: 'available',
+  CHARGING: 'in_use',
+  FAULTY: 'fault',
+  RESERVED: 'offline',
+};
 
 export const plugsApi = {
   list: () => admin<Plug[]>('/plugs'),
   /** stationCode is the station's primary identifier. */
   byStation: (stationCode: string) => admin<Plug[]>(`/plugs/by-station/${stationCode}`),
-  /** plugCode is the plug's primary identifier (e.g. "TR-16-NIL-01-P1"). */
+  /** Change plug status (accepts normalised PlugStatus). */
   updateStatus: (plugCode: string, status: PlugStatus) =>
-    admin<Plug>(`/plugs/${plugCode}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+    admin<Plug>(`/plugs/${plugCode}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: PLUG_STATUS_RAW[status] ?? status.toLowerCase() }),
+    }),
+  /** Change plug status using raw DB values ('available' | 'in_use' | 'fault' | 'offline'). */
+  setStatus: (plugCode: string, raw: 'available' | 'in_use' | 'fault' | 'offline') =>
+    admin<Plug>(`/plugs/${plugCode}/status`, { method: 'PATCH', body: JSON.stringify({ status: raw }) }),
+  /** Add a new plug/socket to a station. */
+  create: (data: {
+    plugCode: string;
+    stationCode: string;
+    plugType: string;
+    powerKw: number;
+  }) => admin<Plug>('/plugs', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────
@@ -194,6 +223,26 @@ export const maintenanceApi = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+};
+
+// ─── Employees ────────────────────────────────────────────────────────────────
+
+export const employeesApi = {
+  /** List all employees — used for assignment dropdowns. */
+  list: () => admin<Employee[]>('/employees'),
+  /** Get one employee's full detail including their assigned stations, maintenance, and tickets. */
+  get: (id: number) => admin<EmployeeDetail>(`/employees/${id}`),
+  /** Promote a user to employee/admin or reactivate an inactive employee record. */
+  create: (data: {
+    userId: number;
+    employeeCode: string;
+    department: string;
+    jobTitle: string;
+    hireDate: string;
+  }) => admin<Employee>('/employees', { method: 'POST', body: JSON.stringify(data) }),
+  /** Update an employee's status ('active' | 'inactive'), department, or job title. */
+  update: (id: number, data: { status?: string; department?: string; jobTitle?: string }) =>
+    admin<Employee>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 // ─── Customer tickets (mobile route — returns only the current user's tickets) ─

@@ -39,8 +39,8 @@ export function StationsView() {
         <ul className="space-y-4">
           {activeStations.map((station) => (
             <li
-              key={station.id}
-              className="rounded-lg border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-[#111111]"
+              key={station.stationCode}
+              className="rounded-xl border border-slate-200/80 bg-white p-5 dark:border-white/7 dark:bg-night-raised"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -54,10 +54,7 @@ export function StationsView() {
               <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
                 {station.district ? `${station.district}, ` : ''}{station.city}
               </p>
-              {station.address && (
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{station.address}</p>
-              )}
-              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 dark:border-white/6">
                 <span className="text-xs text-slate-500 dark:text-slate-400">Müsait soket</span>
                 <span
                   className={`font-mono text-sm font-semibold ${

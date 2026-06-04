@@ -43,10 +43,11 @@ const STATION_LABELS: Record<StationStatus, { label: string; variant: BadgeVaria
   INACTIVE: { label: 'Pasif', variant: 'neutral' },
 };
 
-const TICKET_LABELS: Record<TicketStatus, { label: string; variant: BadgeVariant }> = {
-  OPEN: { label: 'Açık', variant: 'warning' },
+const TICKET_LABELS: Record<string, { label: string; variant: BadgeVariant }> = {
+  OPEN:        { label: 'Açık',     variant: 'warning' },
   IN_PROGRESS: { label: 'İşlemde', variant: 'warning' },
-  CLOSED: { label: 'Kapalı', variant: 'neutral' },
+  RESOLVED:    { label: 'Çözüldü', variant: 'success' },
+  CLOSED:      { label: 'Kapalı',  variant: 'neutral' },
 };
 
 export function SessionStatusBadge({ status }: { status: SessionStatus }) {
@@ -65,8 +66,8 @@ export function StationStatusBadge({ status }: { status: StationStatus }) {
 }
 
 export function TicketStatusBadge({ status }: { status: TicketStatus }) {
-  const { label, variant } = TICKET_LABELS[status];
-  return <Badge label={label} variant={variant} />;
+  const entry = TICKET_LABELS[status] ?? { label: status, variant: 'neutral' as BadgeVariant };
+  return <Badge label={entry.label} variant={entry.variant} />;
 }
 
 const DEVICE_LABELS: Record<DeviceStatus, { label: string; variant: BadgeVariant }> = {
@@ -75,10 +76,20 @@ const DEVICE_LABELS: Record<DeviceStatus, { label: string; variant: BadgeVariant
   MAINTENANCE: { label: 'Bakımda', variant: 'warning' },
 };
 
-const MAINTENANCE_LABELS: Record<MaintenanceStatus, { label: string; variant: BadgeVariant }> = {
-  OPEN: { label: 'Açık', variant: 'warning' },
-  IN_PROGRESS: { label: 'Devam ediyor', variant: 'warning' },
-  RESOLVED: { label: 'Çözüldü', variant: 'success' },
+const MAINTENANCE_LABELS: Record<string, { label: string; variant: BadgeVariant }> = {
+  // Raw DB values (maintenance route does NOT normalise these)
+  scheduled:   { label: 'Planlandı',    variant: 'neutral'  },
+  in_progress: { label: 'Devam Ediyor', variant: 'warning'  },
+  completed:   { label: 'Tamamlandı',   variant: 'success'  },
+  cancelled:   { label: 'İptal',        variant: 'danger'   },
+  // Upper-case aliases (defensive, in case normalisation is added later)
+  SCHEDULED:   { label: 'Planlandı',    variant: 'neutral'  },
+  IN_PROGRESS: { label: 'Devam Ediyor', variant: 'warning'  },
+  COMPLETED:   { label: 'Tamamlandı',   variant: 'success'  },
+  CANCELLED:   { label: 'İptal',        variant: 'danger'   },
+  // Legacy keys that were here before
+  OPEN:        { label: 'Açık',         variant: 'warning'  },
+  RESOLVED:    { label: 'Çözüldü',      variant: 'success'  },
 };
 
 const ROLE_LABELS: Record<UserRole, { label: string; variant: BadgeVariant }> = {
@@ -86,10 +97,11 @@ const ROLE_LABELS: Record<UserRole, { label: string; variant: BadgeVariant }> = 
   CUSTOMER: { label: 'Müşteri', variant: 'neutral' },
 };
 
-const PRIORITY_LABELS: Record<'LOW' | 'MEDIUM' | 'CRITICAL', { label: string; variant: BadgeVariant }> = {
-  LOW: { label: 'Düşük', variant: 'neutral' },
-  MEDIUM: { label: 'Orta', variant: 'warning' },
-  CRITICAL: { label: 'Kritik', variant: 'danger' },
+const PRIORITY_LABELS: Record<string, { label: string; variant: BadgeVariant }> = {
+  LOW:      { label: 'Düşük',  variant: 'neutral' },
+  MEDIUM:   { label: 'Orta',   variant: 'warning' },
+  HIGH:     { label: 'Yüksek', variant: 'warning' },
+  CRITICAL: { label: 'Kritik', variant: 'danger'  },
 };
 
 export function DeviceStatusBadge({ status }: { status: DeviceStatus }) {
@@ -98,8 +110,8 @@ export function DeviceStatusBadge({ status }: { status: DeviceStatus }) {
 }
 
 export function MaintenanceStatusBadge({ status }: { status: MaintenanceStatus }) {
-  const { label, variant } = MAINTENANCE_LABELS[status];
-  return <Badge label={label} variant={variant} />;
+  const entry = MAINTENANCE_LABELS[status] ?? { label: status, variant: 'neutral' as BadgeVariant };
+  return <Badge label={entry.label} variant={entry.variant} />;
 }
 
 export function UserRoleBadge({ role }: { role: UserRole }) {
@@ -107,7 +119,7 @@ export function UserRoleBadge({ role }: { role: UserRole }) {
   return <Badge label={label} variant={variant} />;
 }
 
-export function TicketPriorityBadge({ priority }: { priority: 'LOW' | 'MEDIUM' | 'CRITICAL' }) {
-  const { label, variant } = PRIORITY_LABELS[priority];
-  return <Badge label={label} variant={variant} />;
+export function TicketPriorityBadge({ priority }: { priority: string }) {
+  const entry = PRIORITY_LABELS[priority] ?? { label: priority, variant: 'neutral' as BadgeVariant };
+  return <Badge label={entry.label} variant={entry.variant} />;
 }
