@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Text, View, Pressable, TextInput, ScrollView } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "@/lib/api";
 import { ActionButton } from "@/components/ActionButton";
@@ -32,7 +32,10 @@ type SessionRow = {
 
 type TicketRow = {
   id: number;
+  stationCode?: string | null;
+  sessionId?: number | null;
   title: string;
+  description: string;
   status: string;
   priority: string;
   createdAt: string;
@@ -65,6 +68,15 @@ function formatSessionDate(value?: string | null): string {
   }).format(date);
 }
 
+function formatTicketDate(value?: string | null): string {
+  return formatSessionDate(value);
+}
+
+function formatLabel(value?: string | null): string {
+  if (!value) return "Not attached";
+  return value;
+}
+
 export default function SupportDesk() {
   const [stations, setStations] = useState<StationRow[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -75,6 +87,7 @@ export default function SupportDesk() {
   const [priority, setPriority] = useState("Medium");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<TicketRow | null>(null);
 
   async function loadSupportData() {
     try {
@@ -148,6 +161,16 @@ export default function SupportDesk() {
     return stationName ? `Session #${selectedContext.sessionId} - ${stationName}` : `Session #${selectedContext.sessionId}`;
   }, [selectedContext, sessions, stations]);
 
+  const selectedTicketStation = useMemo(() => {
+    if (!selectedTicket?.stationCode) return null;
+    return stations.find((item) => item.stationCode === selectedTicket.stationCode) ?? null;
+  }, [selectedTicket, stations]);
+
+  const selectedTicketSession = useMemo(() => {
+    if (!selectedTicket?.sessionId) return null;
+    return sessions.find((item) => item.id === selectedTicket.sessionId) ?? null;
+  }, [selectedTicket, sessions]);
+
   const canSubmit = description.trim().length > 0 && !isSubmitting;
 
   return (
@@ -187,7 +210,11 @@ export default function SupportDesk() {
                   const isResolved = ticket.status === "resolved";
 
                   return (
-                    <View key={ticket.id} className="bg-elevated-navy/40 p-4 rounded-xl flex-row justify-between items-center border border-border-slate">
+                    <Pressable
+                      key={ticket.id}
+                      onPress={() => setSelectedTicket(ticket)}
+                      className="bg-elevated-navy/40 p-4 rounded-xl flex-row justify-between items-center border border-border-slate active:scale-[0.98]"
+                    >
                       <View className="space-y-1 flex-1 pr-3">
                         <Text className="text-muted text-[9px] uppercase font-bold tracking-wider" style={{ fontFamily: "Inter" }}>
                           Ticket #{ticket.id}
@@ -205,10 +232,10 @@ export default function SupportDesk() {
                           className={`text-[9px] font-bold uppercase tracking-wider ${isResolved ? "text-[#39FF14]" : "text-cyan-glow"}`}
                           style={{ fontFamily: "Inter" }}
                         >
-                          {ticket.status.toUpperCase()}
+                          Open
                         </Text>
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })
               )}
@@ -401,17 +428,91 @@ export default function SupportDesk() {
             </View>
           </View>
 
-          <View className="bg-slate-navy p-5 rounded-[24px] border border-border-slate flex-row items-center space-x-4 gap-x-4">
-            <View className="w-12 h-12 rounded-full bg-cyan-glow/10 border border-cyan-glow/20 items-center justify-center">
-              <Text className="text-cyan-glow text-lg">💬</Text>
-            </View>
-            <View>
-              <Text className="text-white font-bold text-sm" style={{ fontFamily: "Sora" }}>Live Chat Available</Text>
-              <Text className="text-muted text-[10px] font-semibold mt-0.5" style={{ fontFamily: "Inter" }}>Avg. response time: 2 mins</Text>
-            </View>
-          </View>
         </ScrollView>
       </SafeAreaView>
+
+      <Modal visible={selectedTicket !== null} transparent animationType="slide" onRequestClose={() => setSelectedTicket(null)}>
+        <View className="flex-1 bg-black/60 justify-end">
+          <Pressable className="flex-1" onPress={() => setSelectedTicket(null)} />
+          <View className="bg-slate-navy border border-border-slate rounded-t-[32px] px-6 pt-5 pb-8">
+            {selectedTicket ? (
+              <View className="space-y-4">
+                <View className="flex-row items-start justify-between gap-x-4">
+                  <View className="flex-1">
+                    <Text className="text-muted text-[10px] uppercase font-bold tracking-widest" style={{ fontFamily: "Inter" }}>
+                      Ticket #{selectedTicket.id}
+                    </Text>
+                    <Text className="text-white text-xl font-bold mt-1" style={{ fontFamily: "Sora" }}>
+                      {selectedTicket.title}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => setSelectedTicket(null)}
+                    className="w-10 h-10 rounded-full bg-elevated-navy border border-border-slate items-center justify-center"
+                  >
+                    <Text className="text-white text-lg">x</Text>
+                  </Pressable>
+                </View>
+
+                <View className="flex-row gap-x-3">
+                  <View className="flex-1 bg-elevated-navy/40 rounded-2xl border border-border-slate px-4 py-3">
+                    <Text className="text-muted text-[9px] uppercase font-bold" style={{ fontFamily: "Inter" }}>
+                      Status
+                    </Text>
+                    <Text className="text-cyan-glow text-sm font-bold uppercase mt-1" style={{ fontFamily: "Sora" }}>
+                      {selectedTicket.status}
+                    </Text>
+                  </View>
+                  <View className="flex-1 bg-elevated-navy/40 rounded-2xl border border-border-slate px-4 py-3">
+                    <Text className="text-muted text-[9px] uppercase font-bold" style={{ fontFamily: "Inter" }}>
+                      Priority
+                    </Text>
+                    <Text className="text-white text-sm font-bold uppercase mt-1" style={{ fontFamily: "Sora" }}>
+                      {selectedTicket.priority}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="bg-elevated-navy/40 rounded-2xl border border-border-slate px-4 py-3 space-y-3">
+                  <View>
+                    <Text className="text-muted text-[9px] uppercase font-bold" style={{ fontFamily: "Inter" }}>
+                      Created
+                    </Text>
+                    <Text className="text-white text-sm font-semibold mt-1" style={{ fontFamily: "Inter" }}>
+                      {formatTicketDate(selectedTicket.createdAt)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text className="text-muted text-[9px] uppercase font-bold" style={{ fontFamily: "Inter" }}>
+                      Context
+                    </Text>
+                    <Text className="text-white text-sm font-semibold mt-1" style={{ fontFamily: "Inter" }}>
+                      Station: {selectedTicketStation ? `${selectedTicketStation.name}, ${selectedTicketStation.district}` : formatLabel(selectedTicket.stationCode)}
+                    </Text>
+                    <Text className="text-white text-sm font-semibold mt-1" style={{ fontFamily: "Inter" }}>
+                      Session:{" "}
+                      {selectedTicketSession
+                        ? `#${selectedTicketSession.id} - ${selectedTicketSession.plug?.plugType ?? "Unknown plug"}`
+                        : selectedTicket.sessionId
+                          ? `#${selectedTicket.sessionId}`
+                          : "Not attached"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="bg-elevated-navy/40 rounded-2xl border border-border-slate px-4 py-3">
+                  <Text className="text-muted text-[9px] uppercase font-bold" style={{ fontFamily: "Inter" }}>
+                    Description
+                  </Text>
+                  <Text className="text-white text-sm leading-6 mt-2" style={{ fontFamily: "Inter" }}>
+                    {selectedTicket.description}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -22,11 +22,13 @@ function joinedSelectResult(rows: unknown[]) {
     innerJoin: jest.fn(),
     leftJoin: jest.fn(),
     where: jest.fn().mockResolvedValue(rows),
+    orderBy: jest.fn().mockResolvedValue(rows),
   };
 
   builder.from.mockReturnValue(builder);
   builder.innerJoin.mockReturnValue(builder);
   builder.leftJoin.mockReturnValue(builder);
+  builder.where.mockReturnValue(builder);
 
   return builder;
 }
@@ -198,10 +200,66 @@ describe('SessionService', () => {
     await service.listSessions({ userId: 7, status: 'active' });
 
     expect(joinedQuery.where).toHaveBeenCalledTimes(1);
+    expect(joinedQuery.orderBy).toHaveBeenCalledTimes(1);
     expect(joinedQuery.innerJoin).toHaveBeenCalledTimes(3);
     expect(joinedQuery.leftJoin).toHaveBeenCalledTimes(1);
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(listPlugs).not.toHaveBeenCalled();
+  });
+
+  it('returns completed session history newest first with station and receipt context', async () => {
+    const olderReceipt = {
+      receiptNo: 'R-000001',
+      sessionId: 1,
+      subtotal: '150',
+      taxAmount: '30',
+      totalAmount: '180',
+      currency: 'TRY',
+      issuedAt: new Date('2026-06-04T12:10:00.000Z'),
+      createdAt: new Date('2026-06-04T12:10:00.000Z'),
+      updatedAt: new Date('2026-06-04T12:10:00.000Z'),
+    };
+    const newerReceipt = {
+      ...olderReceipt,
+      receiptNo: 'R-000002',
+      sessionId: 2,
+      totalAmount: '90',
+    };
+    const joinedQuery = joinedSelectResult([
+      sessionContextRow(
+        {
+          id: 2,
+          status: 'completed',
+          startedAt: new Date('2026-06-04T13:00:00.000Z'),
+          endedAt: new Date('2026-06-04T13:05:00.000Z'),
+          energyKwh: '10',
+          durationMinutes: '5',
+          totalPrice: '90',
+        },
+        newerReceipt,
+      ),
+      sessionContextRow(
+        {
+          id: 1,
+          status: 'completed',
+          startedAt: new Date('2026-06-04T12:00:00.000Z'),
+          endedAt: new Date('2026-06-04T12:10:00.000Z'),
+          energyKwh: '20',
+          durationMinutes: '10',
+          totalPrice: '180',
+        },
+        olderReceipt,
+      ),
+    ]);
+    jest.mocked(db.select).mockReturnValue(joinedQuery as never);
+    const service = new SessionService({ listPlugs: jest.fn() } as never);
+
+    const history = await service.listSessions({ userId: 7, status: 'completed' });
+
+    expect(joinedQuery.orderBy).toHaveBeenCalledTimes(1);
+    expect(history.map((session) => session.id)).toEqual([2, 1]);
+    expect(history[0].plug.station.name).toBe('Moda Rapid Hub');
+    expect(history[0].receipt).toEqual(newerReceipt);
   });
 
   it('adds a live projection for active sessions', async () => {

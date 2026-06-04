@@ -1,4 +1,4 @@
-import { and, eq, type SQL } from 'drizzle-orm';
+import { and, desc, eq, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import { plugs, receipts, sessions, stations, users, userVehicles } from '../db/schema';
 import { HttpError } from '../utils/http';
@@ -209,7 +209,8 @@ export class SessionService {
       .innerJoin(plugs, eq(sessions.plugCode, plugs.plugCode))
       .innerJoin(stations, eq(plugs.stationCode, stations.stationCode))
       .leftJoin(receipts, eq(receipts.sessionId, sessions.id));
-    const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+    const filteredQuery = conditions.length > 0 ? query.where(and(...conditions)) : query;
+    const rows = await filteredQuery.orderBy(desc(sessions.startedAt), desc(sessions.id));
 
     return rows.map((row) => this.toSessionContext(row));
   }
