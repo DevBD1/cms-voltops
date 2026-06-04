@@ -57,7 +57,6 @@ export default function Login() {
     setSuccessMessage(null);
 
     const redirectTo = getAuthRedirectUrl();
-    console.log("Supabase password reset redirect:", redirectTo);
 
     const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
       redirectTo,

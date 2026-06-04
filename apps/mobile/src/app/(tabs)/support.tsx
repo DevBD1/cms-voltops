@@ -16,7 +16,7 @@ type StationRow = {
 type SessionRow = {
   id: number;
   status: string;
-  startedAt: string;
+  startedAt?: string | null;
   plug?: {
     plugCode: string;
     plugType: string;
@@ -46,13 +46,23 @@ type SelectedContext =
 
 const priorities = ["Low", "Medium", "High"];
 
-function formatSessionDate(value: string): string {
+function formatSessionDate(value?: string | null): string {
+  if (!value) {
+    return "Unknown date";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
+
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export default function SupportDesk() {

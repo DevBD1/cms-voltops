@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
@@ -181,6 +182,7 @@ export const sessions = pgTable(
     userIdx: index('sessions_user_id_idx').on(table.userId),
     plugIdx: index('sessions_plug_code_idx').on(table.plugCode),
     vehicleIdx: index('sessions_vehicle_plate_number_idx').on(table.vehiclePlateNumber),
+    activeUserIdx: uniqueIndex('sessions_active_user_unique').on(table.userId).where(sql`${table.status} = 'active'`),
   }),
 );
 

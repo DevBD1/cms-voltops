@@ -16,6 +16,21 @@ function selectResult(rows: unknown[]) {
   };
 }
 
+function joinedSelectResult(rows: unknown[]) {
+  const builder = {
+    from: jest.fn(),
+    innerJoin: jest.fn(),
+    leftJoin: jest.fn(),
+    where: jest.fn().mockResolvedValue(rows),
+  };
+
+  builder.from.mockReturnValue(builder);
+  builder.innerJoin.mockReturnValue(builder);
+  builder.leftJoin.mockReturnValue(builder);
+
+  return builder;
+}
+
 function updateResult(rows: unknown[]) {
   return {
     set: jest.fn().mockReturnValue({
@@ -23,6 +38,58 @@ function updateResult(rows: unknown[]) {
         returning: jest.fn().mockResolvedValue(rows),
       }),
     }),
+  };
+}
+
+function sessionContextRow(sessionOverrides: Record<string, unknown> = {}, receipt: Record<string, unknown> | null = null) {
+  const session = {
+    id: 1,
+    userId: 7,
+    plugCode: 'PLUG-1',
+    vehiclePlateNumber: '34ABC123',
+    startedAt: new Date('2026-06-04T12:00:00.000Z'),
+    endedAt: null,
+    energyKwh: null,
+    durationMinutes: null,
+    totalPrice: null,
+    status: 'active',
+    updatedAt: new Date('2026-06-04T12:00:00.000Z'),
+    ...sessionOverrides,
+  };
+
+  return {
+    session,
+    user: {
+      id: 7,
+      firstName: 'Burak',
+      lastName: 'Dorman',
+      email: 'b@example.com',
+      phone: null,
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    },
+    plug: {
+      plugCode: 'PLUG-1',
+      stationCode: 'ST-1',
+      plugType: 'CCS',
+      powerKw: '120',
+      currentType: 'DC',
+      status: 'in_use',
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    },
+    station: {
+      stationCode: 'ST-1',
+      name: 'Moda Rapid Hub',
+      city: 'Istanbul',
+      district: 'Kadikoy',
+      latitude: '40.987',
+      longitude: '29.026',
+      status: 'open',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    },
+    receipt,
   };
 }
 
@@ -75,6 +142,31 @@ describe('SessionService', () => {
     expect(tx.insert).not.toHaveBeenCalled();
   });
 
+  it('maps active-session unique violations to a conflict', async () => {
+    const insertReturning = jest.fn().mockRejectedValue({
+      code: '23505',
+      constraint: 'sessions_active_user_unique',
+    });
+    const insertValues = jest.fn().mockReturnValue({ returning: insertReturning });
+    const tx = {
+      select: jest
+        .fn()
+        .mockReturnValueOnce(selectResult([{ id: 7, isActive: true }]))
+        .mockReturnValueOnce(selectResult([]))
+        .mockReturnValueOnce(selectResult([{ id: 10 }])),
+      update: jest.fn().mockReturnValue(updateResult([{ plugCode: 'PLUG-1', status: 'available' }])),
+      insert: jest.fn().mockReturnValue({ values: insertValues }),
+    };
+    jest.mocked(db.transaction).mockImplementation(async (callback) => callback(tx as never));
+
+    const service = new SessionService({ listPlugs: jest.fn() } as never);
+
+    await expect(service.startSession(7, 'PLUG-1', '34ABC123')).rejects.toMatchObject({
+      status: 409,
+      message: 'Active session already exists',
+    });
+  });
+
   it('returns a conflict when the atomic plug claim finds an existing non-available plug', async () => {
     const tx = {
       select: jest
@@ -96,45 +188,27 @@ describe('SessionService', () => {
     expect(tx.insert).not.toHaveBeenCalled();
   });
 
-  it('passes list filters to the sessions query', async () => {
-    const where = jest.fn().mockResolvedValue([]);
-    jest.mocked(db.select).mockReturnValue({
-      from: jest.fn().mockReturnValue({ where }),
-    } as never);
+  it('loads session context with one joined query when listing sessions', async () => {
+    const listPlugs = jest.fn();
+    const joinedQuery = joinedSelectResult([]);
+    jest.mocked(db.select).mockReturnValue(joinedQuery as never);
 
-    const service = new SessionService({ listPlugs: jest.fn() } as never);
+    const service = new SessionService({ listPlugs } as never);
 
     await service.listSessions({ userId: 7, status: 'active' });
 
-    expect(where).toHaveBeenCalledTimes(1);
+    expect(joinedQuery.where).toHaveBeenCalledTimes(1);
+    expect(joinedQuery.innerJoin).toHaveBeenCalledTimes(3);
+    expect(joinedQuery.leftJoin).toHaveBeenCalledTimes(1);
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(listPlugs).not.toHaveBeenCalled();
   });
 
   it('adds a live projection for active sessions', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-06-04T12:10:00.000Z'));
-    const activeSession = {
-      id: 1,
-      userId: 7,
-      plugCode: 'PLUG-1',
-      vehiclePlateNumber: '34ABC123',
-      startedAt: new Date('2026-06-04T12:00:00.000Z'),
-      endedAt: null,
-      energyKwh: null,
-      durationMinutes: null,
-      totalPrice: null,
-      status: 'active',
-      updatedAt: new Date('2026-06-04T12:00:00.000Z'),
-    };
-    const where = jest.fn().mockResolvedValue([activeSession]);
-    jest
-      .mocked(db.select)
-      .mockReturnValueOnce({
-        from: jest.fn().mockReturnValue({ where }),
-      } as never)
-      .mockReturnValueOnce(selectResult([{ id: 7, firstName: 'Burak', lastName: 'Dorman', email: 'b@example.com', phone: null, isActive: true }]) as never)
-      .mockReturnValueOnce(selectResult([]) as never);
-    const service = new SessionService({
-      listPlugs: jest.fn().mockResolvedValue([{ plugCode: 'PLUG-1', powerKw: '120' }]),
-    } as never);
+    const joinedQuery = joinedSelectResult([sessionContextRow()]);
+    jest.mocked(db.select).mockReturnValue(joinedQuery as never);
+    const service = new SessionService({ listPlugs: jest.fn() } as never);
 
     const [session] = await service.listSessions({ userId: 7, status: 'active' });
 
@@ -150,11 +224,6 @@ describe('SessionService', () => {
 
   it('does not add live projection for completed sessions', async () => {
     const completedSession = {
-      id: 1,
-      userId: 7,
-      plugCode: 'PLUG-1',
-      vehiclePlateNumber: '34ABC123',
-      startedAt: new Date('2026-06-04T12:00:00.000Z'),
       endedAt: new Date('2026-06-04T12:10:00.000Z'),
       energyKwh: '20',
       durationMinutes: '10',
@@ -162,17 +231,9 @@ describe('SessionService', () => {
       status: 'completed',
       updatedAt: new Date('2026-06-04T12:10:00.000Z'),
     };
-    const where = jest.fn().mockResolvedValue([completedSession]);
-    jest
-      .mocked(db.select)
-      .mockReturnValueOnce({
-        from: jest.fn().mockReturnValue({ where }),
-      } as never)
-      .mockReturnValueOnce(selectResult([{ id: 7, firstName: 'Burak', lastName: 'Dorman', email: 'b@example.com', phone: null, isActive: true }]) as never)
-      .mockReturnValueOnce(selectResult([]) as never);
-    const service = new SessionService({
-      listPlugs: jest.fn().mockResolvedValue([{ plugCode: 'PLUG-1', powerKw: '120' }]),
-    } as never);
+    const joinedQuery = joinedSelectResult([sessionContextRow(completedSession)]);
+    jest.mocked(db.select).mockReturnValue(joinedQuery as never);
+    const service = new SessionService({ listPlugs: jest.fn() } as never);
 
     const [session] = await service.listSessions({ userId: 7, status: 'completed' });
 
@@ -215,13 +276,8 @@ describe('SessionService', () => {
       insert: jest.fn().mockReturnValue({ values: receiptValues }),
     };
     jest.mocked(db.transaction).mockImplementation(async (callback) => callback(tx as never));
-    jest
-      .mocked(db.select)
-      .mockReturnValueOnce(selectResult([{ id: 7, firstName: 'Burak', lastName: 'Dorman', email: 'b@example.com', phone: null, isActive: true }]) as never)
-      .mockReturnValueOnce(selectResult([]) as never);
-    const service = new SessionService({
-      listPlugs: jest.fn().mockResolvedValue([{ plugCode: 'PLUG-1', powerKw: '120' }]),
-    } as never);
+    jest.mocked(db.select).mockReturnValue(joinedSelectResult([sessionContextRow(updatedSession)]) as never);
+    const service = new SessionService({ listPlugs: jest.fn() } as never);
 
     const session = await service.endSession(1, 20, 7);
 

@@ -16,28 +16,40 @@ function selectResult(rows: unknown[]) {
   };
 }
 
-function profileSelects(vehicleRows: unknown[] = []) {
-  jest
-    .mocked(db.select)
-    .mockReturnValueOnce(selectResult([
-      {
-        id: 7,
-        firstName: 'Burak',
-        lastName: 'Dorman',
-        email: 'burak@example.com',
-        phone: null,
-        isActive: true,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      },
-    ]) as never)
-    .mockReturnValueOnce({
-      from: jest.fn().mockReturnValue({
-        innerJoin: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(vehicleRows),
-        }),
+function orderedSelectResult(rows: unknown[]) {
+  const orderBy = jest.fn().mockResolvedValue(rows);
+
+  return {
+    from: jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnValue({ orderBy }),
+    }),
+    orderBy,
+  };
+}
+
+function profileVehicleResult(vehicleRows: unknown[] = []) {
+  return {
+    from: jest.fn().mockReturnValue({
+      innerJoin: jest.fn().mockReturnValue({
+        where: jest.fn().mockResolvedValue(vehicleRows),
       }),
-    } as never);
+    }),
+  };
+}
+
+function profileUserResult() {
+  return selectResult([
+    {
+      id: 7,
+      firstName: 'Burak',
+      lastName: 'Dorman',
+      email: 'burak@example.com',
+      phone: null,
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    },
+  ]);
 }
 
 describe('VehicleService', () => {
@@ -55,7 +67,7 @@ describe('VehicleService', () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it('marks the first user vehicle as primary', async () => {
+  it('marks the first user vehicle as primary and returns the transaction-scoped profile', async () => {
     const vehicleValues = jest.fn().mockReturnValue({ onConflictDoNothing: jest.fn().mockResolvedValue(undefined) });
     const linkReturning = jest.fn().mockResolvedValue([{ id: 1 }]);
     const linkValues = jest.fn().mockReturnValue({
@@ -67,15 +79,16 @@ describe('VehicleService', () => {
       select: jest
         .fn()
         .mockReturnValueOnce(selectResult([{ id: 7 }]))
-        .mockReturnValueOnce(selectResult([])),
+        .mockReturnValueOnce(selectResult([]))
+        .mockReturnValueOnce(profileUserResult())
+        .mockReturnValueOnce(profileVehicleResult([{ plateNumber: '34ABC123', connectorType: 'CCS', isPrimary: true }])),
       insert: jest.fn().mockReturnValueOnce({ values: vehicleValues }).mockReturnValueOnce({ values: linkValues }),
     };
     jest.mocked(db.transaction).mockImplementation(async (callback) => callback(tx as never));
-    profileSelects([{ plateNumber: '34ABC123', connectorType: 'CCS', isPrimary: true }]);
 
     const service = new VehicleService();
 
-    await service.addVehicle(7, { plateNumber: '34 abc 123', connectorType: 'CCS' });
+    const profile = await service.addVehicle(7, { plateNumber: '34 abc 123', connectorType: 'CCS' });
 
     expect(vehicleValues).toHaveBeenCalledWith({ plateNumber: '34ABC123', connectorType: 'CCS' });
     expect(linkValues).toHaveBeenCalledWith({
@@ -84,6 +97,9 @@ describe('VehicleService', () => {
       relationshipType: 'owner',
       isPrimary: true,
     });
+    expect(profile.vehicles).toEqual([{ plateNumber: '34ABC123', connectorType: 'CCS', isPrimary: true }]);
+    expect(tx.select).toHaveBeenCalledTimes(4);
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('rejects duplicate user vehicle links', async () => {
@@ -121,27 +137,32 @@ describe('VehicleService', () => {
     expect(tx.delete).not.toHaveBeenCalled();
   });
 
-  it('promotes the next vehicle when removing the primary vehicle', async () => {
+  it('promotes the oldest remaining vehicle when removing the primary vehicle', async () => {
     const deleteReturning = jest.fn().mockResolvedValue([{ id: 1, isPrimary: true }]);
     const updateWhere = jest.fn().mockResolvedValue(undefined);
+    const remainingLinksResult = orderedSelectResult([{ id: 2 }]);
     const tx = {
       select: jest
         .fn()
         .mockReturnValueOnce(selectResult([]))
+        .mockReturnValueOnce(remainingLinksResult)
         .mockReturnValueOnce(selectResult([{ id: 2 }]))
-        .mockReturnValueOnce(selectResult([{ id: 2 }]))
-        .mockReturnValueOnce(selectResult([])),
+        .mockReturnValueOnce(selectResult([]))
+        .mockReturnValueOnce(profileUserResult())
+        .mockReturnValueOnce(profileVehicleResult([{ plateNumber: '35DEF456', connectorType: 'Type-2', isPrimary: true }])),
       delete: jest.fn().mockReturnValueOnce({ where: jest.fn().mockReturnValue({ returning: deleteReturning }) }),
       update: jest.fn().mockReturnValue({ set: jest.fn().mockReturnValue({ where: updateWhere }) }),
     };
     jest.mocked(db.transaction).mockImplementation(async (callback) => callback(tx as never));
-    profileSelects([{ plateNumber: '35DEF456', connectorType: 'Type-2', isPrimary: true }]);
 
     const service = new VehicleService();
 
-    await service.removeVehicle(7, '34ABC123');
+    const profile = await service.removeVehicle(7, '34ABC123');
 
+    expect(remainingLinksResult.orderBy).toHaveBeenCalledTimes(1);
     expect(updateWhere).toHaveBeenCalledTimes(1);
+    expect(profile.vehicles).toEqual([{ plateNumber: '35DEF456', connectorType: 'Type-2', isPrimary: true }]);
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('deletes orphan vehicles only when no links or sessions remain', async () => {
@@ -152,19 +173,21 @@ describe('VehicleService', () => {
         .fn()
         .mockReturnValueOnce(selectResult([]))
         .mockReturnValueOnce(selectResult([]))
-        .mockReturnValueOnce(selectResult([])),
+        .mockReturnValueOnce(selectResult([]))
+        .mockReturnValueOnce(profileUserResult())
+        .mockReturnValueOnce(profileVehicleResult([])),
       delete: jest
         .fn()
         .mockReturnValueOnce({ where: jest.fn().mockReturnValue({ returning: deleteReturning }) })
         .mockReturnValueOnce({ where: vehicleDeleteWhere }),
     };
     jest.mocked(db.transaction).mockImplementation(async (callback) => callback(tx as never));
-    profileSelects([]);
 
     const service = new VehicleService();
 
-    await service.removeVehicle(7, '34ABC123');
+    const profile = await service.removeVehicle(7, '34ABC123');
 
     expect(vehicleDeleteWhere).toHaveBeenCalledTimes(1);
+    expect(profile.vehicles).toEqual([]);
   });
 });

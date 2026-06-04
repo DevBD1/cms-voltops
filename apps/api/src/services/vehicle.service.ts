@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { sessions, userVehicles, users, vehicles } from '../db/schema';
 import { HttpError } from '../utils/http';
@@ -6,6 +6,7 @@ import { HttpError } from '../utils/http';
 export type ConnectorType = 'CCS' | 'Type-2' | 'CHAdeMO';
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type DbReader = Pick<typeof db, 'select'>;
 
 export const allowedConnectorTypes: ConnectorType[] = ['CCS', 'Type-2', 'CHAdeMO'];
 
@@ -24,7 +25,7 @@ export class VehicleService {
     const plateNumber = normalizePlateNumber(input.plateNumber);
     assertValidPlateNumber(plateNumber);
 
-    await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       await this.assertUserExists(tx, userId);
 
       const existingLinks = await tx.select().from(userVehicles).where(eq(userVehicles.userId, userId));
@@ -49,16 +50,16 @@ export class VehicleService {
       if (!createdLink) {
         throw new HttpError(409, 'Vehicle already linked to current user');
       }
-    });
 
-    return this.getProfile(userId);
+      return this.getProfile(userId, tx);
+    });
   }
 
   async removeVehicle(userId: number, plateNumberInput: string) {
     const plateNumber = normalizePlateNumber(plateNumberInput);
     assertValidPlateNumber(plateNumber);
 
-    await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
       const [activeSession] = await tx
         .select({ id: sessions.id })
         .from(sessions)
@@ -78,7 +79,11 @@ export class VehicleService {
       }
 
       if (removedLink.isPrimary) {
-        const remainingUserLinks = await tx.select().from(userVehicles).where(eq(userVehicles.userId, userId));
+        const remainingUserLinks = await tx
+          .select()
+          .from(userVehicles)
+          .where(eq(userVehicles.userId, userId))
+          .orderBy(asc(userVehicles.id));
         const nextPrimary = remainingUserLinks[0];
 
         if (nextPrimary) {
@@ -92,9 +97,9 @@ export class VehicleService {
       if (!remainingLink && !referencedSession) {
         await tx.delete(vehicles).where(eq(vehicles.plateNumber, plateNumber));
       }
-    });
 
-    return this.getProfile(userId);
+      return this.getProfile(userId, tx);
+    });
   }
 
   private async assertUserExists(tx: Transaction, userId: number): Promise<void> {
@@ -105,14 +110,14 @@ export class VehicleService {
     }
   }
 
-  private async getProfile(userId: number) {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
+  private async getProfile(userId: number, client: DbReader = db) {
+    const [user] = await client.select().from(users).where(eq(users.id, userId));
 
     if (!user) {
       throw new HttpError(404, 'User not found');
     }
 
-    const ownedVehicles = await db
+    const ownedVehicles = await client
       .select({
         id: userVehicles.id,
         relationshipType: userVehicles.relationshipType,
