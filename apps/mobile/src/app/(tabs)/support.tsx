@@ -1,11 +1,33 @@
-import { useEffect, useState } from "react";
-import { Text, View, Pressable, TextInput, ScrollView, ActivityIndicator } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Text, View, Pressable, TextInput, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiRequest } from "@/lib/api";
+import { ActionButton } from "@/components/ActionButton";
 
 type StationRow = {
   stationCode: string;
   name: string;
+  city: string;
+  district: string;
+  totalPlugs: number;
+  availablePlugs: number;
+};
+
+type SessionRow = {
+  id: number;
+  status: string;
+  startedAt: string;
+  plug?: {
+    plugCode: string;
+    plugType: string;
+    powerKw: string;
+    station?: {
+      stationCode: string;
+      name: string;
+      city: string;
+      district: string;
+    };
+  };
 };
 
 type TicketRow = {
@@ -16,10 +38,29 @@ type TicketRow = {
   createdAt: string;
 };
 
+type ContextMode = "station" | "session";
+type SelectedContext =
+  | { type: "general" }
+  | { type: "station"; stationCode: string }
+  | { type: "session"; sessionId: number; stationCode?: string };
+
+const priorities = ["Low", "Medium", "High"];
+
+function formatSessionDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export default function SupportDesk() {
   const [stations, setStations] = useState<StationRow[]>([]);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [tickets, setTickets] = useState<TicketRow[]>([]);
-  const [stationCode, setStationCode] = useState("");
+  const [contextMode, setContextMode] = useState<ContextMode>("station");
+  const [selectedContext, setSelectedContext] = useState<SelectedContext>({ type: "general" });
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -27,11 +68,13 @@ export default function SupportDesk() {
 
   async function loadSupportData() {
     try {
-      const [stationRows, ticketRows] = await Promise.all([
+      const [stationRows, sessionRows, ticketRows] = await Promise.all([
         apiRequest<StationRow[]>("/api/mobile/stations"),
+        apiRequest<SessionRow[]>("/api/mobile/sessions"),
         apiRequest<TicketRow[]>("/api/mobile/tickets"),
       ]);
       setStations(stationRows);
+      setSessions(sessionRows);
       setTickets(ticketRows);
       setErrorMessage(null);
     } catch (error) {
@@ -40,7 +83,9 @@ export default function SupportDesk() {
   }
 
   async function handleCreateTicket() {
-    if (!description.trim()) {
+    const trimmedDescription = description.trim();
+
+    if (!trimmedDescription) {
       setErrorMessage("Please describe the issue or fault first.");
       return;
     }
@@ -49,17 +94,25 @@ export default function SupportDesk() {
     setErrorMessage(null);
 
     try {
+      const payload = {
+        stationCode:
+          selectedContext.type === "station"
+            ? selectedContext.stationCode
+            : selectedContext.type === "session"
+              ? selectedContext.stationCode
+              : undefined,
+        sessionId: selectedContext.type === "session" ? selectedContext.sessionId : undefined,
+        title: trimmedDescription.slice(0, 80) || "Support ticket",
+        description: trimmedDescription,
+        priority: priority.toLowerCase(),
+      };
+
       await apiRequest<TicketRow>("/api/mobile/tickets", {
         method: "POST",
-        body: JSON.stringify({
-          stationCode: stationCode.trim() || undefined,
-          title: description.trim().slice(0, 80) || "Support ticket",
-          description,
-          priority: priority.toLowerCase(),
-        }),
+        body: JSON.stringify(payload),
       });
       setDescription("");
-      setStationCode("");
+      setSelectedContext({ type: "general" });
       await loadSupportData();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to create ticket");
@@ -72,9 +125,23 @@ export default function SupportDesk() {
     loadSupportData();
   }, []);
 
+  const selectedContextLabel = useMemo(() => {
+    if (selectedContext.type === "general") return "General issue";
+
+    if (selectedContext.type === "station") {
+      const station = stations.find((item) => item.stationCode === selectedContext.stationCode);
+      return station ? station.name : "Selected station";
+    }
+
+    const session = sessions.find((item) => item.id === selectedContext.sessionId);
+    const stationName = session?.plug?.station?.name;
+    return stationName ? `Session #${selectedContext.sessionId} - ${stationName}` : `Session #${selectedContext.sessionId}`;
+  }, [selectedContext, sessions, stations]);
+
+  const canSubmit = description.trim().length > 0 && !isSubmitting;
+
   return (
     <View className="flex-1 bg-midnight relative">
-      {/* Background ambient glows */}
       <View
         className="absolute w-[800px] h-[800px] rounded-full opacity-5 blur-[120px]"
         style={{
@@ -85,7 +152,6 @@ export default function SupportDesk() {
       />
 
       <SafeAreaView className="flex-1 z-10 px-6 pt-4">
-        {/* Header App Bar */}
         <View className="mb-6">
           <Text className="text-white text-3xl font-extrabold tracking-tight uppercase" style={{ fontFamily: "Sora" }}>
             Help Center
@@ -96,8 +162,6 @@ export default function SupportDesk() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} className="space-y-6">
-
-          {/* Active Tickets List */}
           <View className="space-y-2">
             <Text className="text-muted text-[10px] uppercase font-bold tracking-widest ml-1" style={{ fontFamily: "Inter" }}>
               Active Tickets
@@ -122,12 +186,15 @@ export default function SupportDesk() {
                           {ticket.title}
                         </Text>
                       </View>
-                      <View className={`px-2.5 py-1 rounded-full border ${
-                        isResolved ? "bg-[#39FF14]/10 border-[#39FF14]/25" : "bg-cyan-glow/10 border-cyan-glow/25"
-                      }`}>
-                        <Text className={`text-[9px] font-bold uppercase tracking-wider ${
-                          isResolved ? "text-[#39FF14]" : "text-cyan-glow"
-                        }`} style={{ fontFamily: "Inter" }}>
+                      <View
+                        className={`px-2.5 py-1 rounded-full border ${
+                          isResolved ? "bg-[#39FF14]/10 border-[#39FF14]/25" : "bg-cyan-glow/10 border-cyan-glow/25"
+                        }`}
+                      >
+                        <Text
+                          className={`text-[9px] font-bold uppercase tracking-wider ${isResolved ? "text-[#39FF14]" : "text-cyan-glow"}`}
+                          style={{ fontFamily: "Inter" }}
+                        >
                           {ticket.status.toUpperCase()}
                         </Text>
                       </View>
@@ -138,30 +205,136 @@ export default function SupportDesk() {
             </View>
           </View>
 
-          {/* Form Incident Report */}
           <View className="space-y-2">
             <Text className="text-muted text-[10px] uppercase font-bold tracking-widest ml-1" style={{ fontFamily: "Inter" }}>
               Report An Issue
             </Text>
 
             <View className="bg-slate-navy p-6 rounded-[32px] border border-border-slate space-y-4">
-              {/* Select Station Input */}
-              <View className="space-y-1.5">
+              <View className="space-y-2">
                 <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
-                  Station / Session ID
+                  Issue Context
                 </Text>
-                <View className="bg-elevated-navy border border-border-slate rounded-2xl px-4 py-3.5">
-                  <TextInput
-                    placeholder={stations[0]?.stationCode ?? "E.g. VLT-7704-BETA"}
-                    placeholderTextColor="#64748B"
-                    className="text-white text-sm outline-none"
-                    value={stationCode}
-                    onChangeText={setStationCode}
-                  />
+
+                <Pressable
+                  onPress={() => setSelectedContext({ type: "general" })}
+                  className={`p-4 rounded-2xl border ${selectedContext.type === "general" ? "border-cyan-glow bg-cyan-glow/10" : "border-border-slate bg-elevated-navy/30"}`}
+                >
+                  <Text className={`text-sm font-bold ${selectedContext.type === "general" ? "text-cyan-glow" : "text-white"}`} style={{ fontFamily: "Sora" }}>
+                    General issue
+                  </Text>
+                  <Text className="text-muted text-[10px] mt-1" style={{ fontFamily: "Inter" }}>
+                    Use this when the issue is not tied to a specific charger or past session.
+                  </Text>
+                </Pressable>
+
+                <View className="flex-row gap-x-2">
+                  {(["station", "session"] as ContextMode[]).map((mode) => {
+                    const isActive = contextMode === mode;
+
+                    return (
+                      <Pressable
+                        key={mode}
+                        onPress={() => setContextMode(mode)}
+                        className={`flex-1 py-3 rounded-full border items-center justify-center ${
+                          isActive ? "border-cyan-glow bg-cyan-glow/5" : "border-border-slate bg-elevated-navy/40"
+                        }`}
+                      >
+                        <Text className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? "text-cyan-glow" : "text-muted"}`} style={{ fontFamily: "Inter" }}>
+                          {mode}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
+
+                {contextMode === "station" ? (
+                  <View className="space-y-2">
+                    {stations.map((station) => {
+                      const isSelected = selectedContext.type === "station" && selectedContext.stationCode === station.stationCode;
+
+                      return (
+                        <Pressable
+                          key={station.stationCode}
+                          onPress={() => setSelectedContext({ type: "station", stationCode: station.stationCode })}
+                          className={`p-4 rounded-2xl border ${isSelected ? "border-cyan-glow bg-cyan-glow/10" : "border-border-slate bg-elevated-navy/30"}`}
+                        >
+                          <View className="flex-row justify-between gap-x-3">
+                            <View className="flex-1">
+                              <Text className={`text-sm font-bold ${isSelected ? "text-cyan-glow" : "text-white"}`} style={{ fontFamily: "Sora" }}>
+                                {station.name}
+                              </Text>
+                              <Text className="text-muted text-[10px] mt-1" style={{ fontFamily: "Inter" }}>
+                                {station.district}, {station.city}
+                              </Text>
+                            </View>
+                            <Text className="text-muted text-[10px] font-bold" style={{ fontFamily: "Inter" }}>
+                              {station.availablePlugs}/{station.totalPlugs} plugs
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View className="space-y-2">
+                    {sessions.length === 0 ? (
+                      <View className="p-4 rounded-2xl border border-border-slate bg-elevated-navy/30">
+                        <Text className="text-muted text-xs text-center" style={{ fontFamily: "Inter" }}>
+                          No historical sessions yet.
+                        </Text>
+                      </View>
+                    ) : (
+                      sessions.map((session) => {
+                        const isSelected = selectedContext.type === "session" && selectedContext.sessionId === session.id;
+                        const station = session.plug?.station;
+
+                        return (
+                          <Pressable
+                            key={session.id}
+                            onPress={() => setSelectedContext({ type: "session", sessionId: session.id, stationCode: station?.stationCode })}
+                            className={`p-4 rounded-2xl border ${isSelected ? "border-cyan-glow bg-cyan-glow/10" : "border-border-slate bg-elevated-navy/30"}`}
+                          >
+                            <View className="flex-row justify-between gap-x-3">
+                              <View className="flex-1">
+                                <Text className={`text-sm font-bold ${isSelected ? "text-cyan-glow" : "text-white"}`} style={{ fontFamily: "Sora" }}>
+                                  Session #{session.id}
+                                </Text>
+                                <Text className="text-muted text-[10px] mt-1" style={{ fontFamily: "Inter" }}>
+                                  {station ? `${station.name} - ${station.district}` : session.plug?.plugCode ?? "Unknown charger"}
+                                </Text>
+                              </View>
+                              <View className="items-end">
+                                <Text className="text-muted text-[10px] font-bold uppercase" style={{ fontFamily: "Inter" }}>
+                                  {session.status}
+                                </Text>
+                                <Text className="text-muted text-[10px] mt-1" style={{ fontFamily: "Inter" }}>
+                                  {formatSessionDate(session.startedAt)}
+                                </Text>
+                              </View>
+                            </View>
+                            {session.plug ? (
+                              <Text className="text-muted text-[10px] mt-2" style={{ fontFamily: "Inter" }}>
+                                {session.plug.plugType} • {Number(session.plug.powerKw).toFixed(0)} kW
+                              </Text>
+                            ) : null}
+                          </Pressable>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
               </View>
 
-              {/* Description Input */}
+              <View className="bg-elevated-navy/30 border border-border-slate rounded-2xl px-4 py-3">
+                <Text className="text-muted text-[10px] font-bold uppercase tracking-wider" style={{ fontFamily: "Inter" }}>
+                  Selected context
+                </Text>
+                <Text className="text-white text-sm font-bold mt-1" style={{ fontFamily: "Sora" }}>
+                  {selectedContextLabel}
+                </Text>
+              </View>
+
               <View className="space-y-1.5">
                 <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
                   Description / Fault logs
@@ -178,13 +351,12 @@ export default function SupportDesk() {
                 </View>
               </View>
 
-              {/* Priority Chips */}
               <View className="space-y-1.5">
                 <Text className="text-muted text-[10px] font-bold tracking-widest uppercase ml-1" style={{ fontFamily: "Inter" }}>
                   Priority Level
                 </Text>
                 <View className="flex-row space-x-2 gap-x-2">
-                  {["Low", "Medium", "High"].map((item) => {
+                  {priorities.map((item) => {
                     const isActive = priority === item;
 
                     return (
@@ -208,31 +380,17 @@ export default function SupportDesk() {
                 <Text className="text-red-400 text-xs text-center">{errorMessage}</Text>
               ) : null}
 
-              {/* Submit CTA */}
-              <Pressable
+              <ActionButton
+                label={description.trim() ? "Submit request" : "Describe issue first"}
+                iconName="send-outline"
                 onPress={handleCreateTicket}
-                disabled={isSubmitting}
-                className="w-full py-4 bg-white rounded-full items-center justify-center active:scale-[0.98] transition-transform shadow-lg mt-2"
-                style={{
-                  shadowColor: "#FFF",
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 10,
-                  elevation: 5,
-                }}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#0A0E1A" size="small" />
-                ) : (
-                  <Text className="text-midnight font-extrabold text-xs uppercase tracking-widest" style={{ fontFamily: "Sora" }}>
-                    Submit Request
-                  </Text>
-                )}
-              </Pressable>
+                disabled={!canSubmit}
+                loading={isSubmitting}
+                variant="neutral"
+              />
             </View>
           </View>
 
-          {/* Contact Support Agent */}
           <View className="bg-slate-navy p-5 rounded-[24px] border border-border-slate flex-row items-center space-x-4 gap-x-4">
             <View className="w-12 h-12 rounded-full bg-cyan-glow/10 border border-cyan-glow/20 items-center justify-center">
               <Text className="text-cyan-glow text-lg">💬</Text>
@@ -242,7 +400,6 @@ export default function SupportDesk() {
               <Text className="text-muted text-[10px] font-semibold mt-0.5" style={{ fontFamily: "Inter" }}>Avg. response time: 2 mins</Text>
             </View>
           </View>
-
         </ScrollView>
       </SafeAreaView>
     </View>

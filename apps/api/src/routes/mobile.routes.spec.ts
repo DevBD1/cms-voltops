@@ -109,4 +109,34 @@ describe('createMobileRouter', () => {
     expect(response.body).toEqual({ data: profile });
     expect(vehicleService.removeVehicle).toHaveBeenCalledWith(7, '34ABC123');
   });
+
+  it('creates a ticket with authenticated user session context', async () => {
+    const ticket = { id: 12, userId: 7, sessionId: 44, stationCode: 'ST-1', title: 'Blocked charger', status: 'open' };
+    const { app, ticketService } = createTestApp({
+      ticketService: {
+        listTickets: jest.fn(),
+        createTicket: jest.fn().mockResolvedValue(ticket),
+      },
+    });
+
+    const response = await request(app).post('/api/mobile/tickets').set('Authorization', 'Bearer user-token').send({
+      userId: 999,
+      stationCode: 'ST-1',
+      sessionId: 44,
+      title: 'Blocked charger',
+      description: 'A vehicle is parked in the charging bay.',
+      priority: 'high',
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({ data: ticket });
+    expect(ticketService.createTicket).toHaveBeenCalledWith({
+      userId: 7,
+      stationCode: 'ST-1',
+      sessionId: 44,
+      title: 'Blocked charger',
+      description: 'A vehicle is parked in the charging bay.',
+      priority: 'high',
+    });
+  });
 });
