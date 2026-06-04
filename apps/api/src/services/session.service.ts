@@ -6,6 +6,9 @@ import { CatalogService } from './catalog.service';
 
 const fallbackPricePerKwh = 7.5;
 const receiptTaxRate = 0.2;
+const demoBatteryCapacityKwh = 75;
+const demoStartingBatteryPercent = 20;
+const demoMaxBatteryPercent = 95;
 
 type Session = typeof sessions.$inferSelect;
 export type SessionStatus = 'active' | 'completed' | 'cancelled';
@@ -174,6 +177,28 @@ export class SessionService {
       user: publicUser,
       plug,
       receipt: receipt ?? null,
+      live: session.status === 'active' && plug ? this.toLiveProjection(session, Number(plug.powerKw)) : undefined,
+    };
+  }
+
+  private toLiveProjection(session: Session, chargeSpeedKw: number) {
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - session.startedAt.getTime()) / 1000));
+    const unconstrainedEnergyKwh = (chargeSpeedKw * elapsedSeconds) / 3600;
+    const maxDemoEnergyKwh = ((demoMaxBatteryPercent - demoStartingBatteryPercent) / 100) * demoBatteryCapacityKwh;
+    const estimatedEnergyKwh = Math.round(Math.min(unconstrainedEnergyKwh, maxDemoEnergyKwh) * 100) / 100;
+    const estimatedPrice = Math.round(estimatedEnergyKwh * fallbackPricePerKwh * (1 + receiptTaxRate) * 100) / 100;
+    const batteryPercent = Math.min(
+      demoMaxBatteryPercent,
+      Math.round((demoStartingBatteryPercent + (estimatedEnergyKwh / demoBatteryCapacityKwh) * 100) * 10) / 10,
+    );
+
+    return {
+      elapsedSeconds,
+      estimatedEnergyKwh,
+      estimatedPrice,
+      batteryPercent,
+      chargeSpeedKw,
+      currency: 'TRY',
     };
   }
 }
