@@ -63,28 +63,28 @@ Bu şema, bir kullanıcının şarj istasyonunda oturum başlatması ve bitirmes
 
 ```mermaid
 flowchart TD
-    subgraph "Oturum Başlatma Akışı (proc_start_session)"
-        A1[Kullanıcı: Seans Başlatma İsteği] --> A2{Kullanıcı Aktif mi?}
-        A2 -- Hayır --> A3[Hata: Aktif Kullanıcı Bulunamadı]
-        A2 -- Evet --> A4{Aktif Başka Seansı Var mı?}
-        A4 -- Evet --> A5[Hata: Aktif Seans Zaten Mevcut]
-        A4 -- Hayır --> A6{Araç Plakası Kullanıcıya mı Ait?}
-        A6 -- Hayır --> A7[Hata: Geçersiz Araç]
-        A6 -- Evet / Belirtilmemiş --> A8{Soket Durumu 'available' mı?}
-        A8 -- Hayır --> A9[Hata: Soket Müsait Değil]
-        A8 -- Evet --> A10[Soket Durumunu 'in_use' Yap]
-        A10 --> A11[Yeni Seans Kaydı Aç status='active']
+    subgraph START_FLOW["Oturum Baslatma Akisi"]
+        A1["Kullanici: Seans baslatma istegi"] --> A2{"Kullanici aktif mi?"}
+        A2 -->|"Hayir"| A3["Hata: aktif kullanici bulunamadi"]
+        A2 -->|"Evet"| A4{"Aktif baska seansi var mi?"}
+        A4 -->|"Evet"| A5["Hata: aktif seans zaten mevcut"]
+        A4 -->|"Hayir"| A6{"Arac plakasi kullaniciya mi ait?"}
+        A6 -->|"Hayir"| A7["Hata: gecersiz arac"]
+        A6 -->|"Evet veya belirtilmemis"| A8{"Soket durumu available mi?"}
+        A8 -->|"Hayir"| A9["Hata: soket musait degil"]
+        A8 -->|"Evet"| A10["Soket durumunu in_use yap"]
+        A10 --> A11["Yeni seans kaydi ac: status active"]
     end
 
-    subgraph "Oturum Sonlandırma Akışı (proc_end_session)"
-        B1[Kullanıcı/Sistem: Seans Bitirme İsteği] --> B2{Seans Mevcut ve Aktif mi?}
-        B2 -- Hayır --> B3[Hata: Aktif Seans Bulunamadı]
-        B2 -- Evet --> B4{Tüketilen Enerji > 0 kWh?}
-        B4 -- Hayır --> B5[Hata: Enerji Değeri Geçersiz]
-        B4 -- Evet --> B6[Aktif Fiyat Kuralını ve Vergi Oranını Çek]
-        B6 --> B7[Seansı Kapat status='completed']
-        B7 --> B8[Soket Durumunu 'available' Yap]
-        B8 --> B9[Receipts Tablosuna Fatura Kaydı Ekle R-XXXXXX]
+    subgraph END_FLOW["Oturum Sonlandirma Akisi"]
+        B1["Kullanici veya sistem: seans bitirme istegi"] --> B2{"Seans mevcut ve aktif mi?"}
+        B2 -->|"Hayir"| B3["Hata: aktif seans bulunamadi"]
+        B2 -->|"Evet"| B4{"Tuketilen enerji 0 kWh'den buyuk mu?"}
+        B4 -->|"Hayir"| B5["Hata: enerji degeri gecersiz"]
+        B4 -->|"Evet"| B6["Aktif fiyat kuralini ve vergi oranini cek"]
+        B6 --> B7["Seansi kapat: status completed"]
+        B7 --> B8["Soket durumunu available yap"]
+        B8 --> B9["Receipts tablosuna fatura kaydi ekle"]
     end
 ```
 
@@ -94,25 +94,25 @@ Bu şema, mobil ve yönetici istemcilerinin kimlik doğrulama süreçleri ve yer
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Client as Mobil / Admin İstemci
+    participant Client as Mobil/Admin Istemci
     participant SupaAuth as Supabase Auth
     participant API as Express API (AuthService)
     participant DB as PostgreSQL (Supabase)
 
-    Client->>SupaAuth: Kullanıcı Giriş Bilgileri (OAuth / Email)
+    Client->>SupaAuth: Kullanici giris bilgileri (OAuth/Email)
     SupaAuth-->>Client: Supabase JWT (Access Token)
-    Client->>API: HTTP Talebi + Bearer JWT (Headers)
-    API->>SupaAuth: JWT Doğrulama Talebi (supabaseAuth.auth.getUser)
-    SupaAuth-->>API: Kullanıcı Profili (UUID, E-posta, Metadatalar)
-    API->>DB: 'users' Tablosunda auth_user_id veya E-posta ile Sorgula
-    alt Yerel Kayıt Bulunamazsa
-        API->>DB: Yeni Kullanıcı Satırı Ekle (Metadataları Kaydet)
-    else Yerel Kayıt Varsa (Eksik Profil Alanı Varsa)
-        API->>DB: Eksik Alanları Güncelle (Backfill)
+    Client->>API: HTTP talebi ve Bearer JWT
+    API->>SupaAuth: JWT dogrulama talebi
+    SupaAuth-->>API: Kullanici profili
+    API->>DB: users tablosunda auth_user_id veya e-posta ile sorgula
+    alt Yerel kayit bulunamazsa
+        API->>DB: Yeni kullanici satiri ekle
+    else Yerel kayit varsa
+        API->>DB: Eksik profil alanlarini guncelle
     end
-    DB-->>API: Yerel Kullanıcı Kaydı (Local Primary Key: id)
-    API->>API: Admin İse 'employees' Yetkisini Kontrol Et
-    API-->>Client: İstek Yanıtı (JSON)
+    DB-->>API: Yerel kullanici kaydi
+    API->>API: Admin ise employees yetkisini kontrol et
+    API-->>Client: Istek yaniti (JSON)
 ```
 
 ---
@@ -160,7 +160,7 @@ erDiagram
 
     EMPLOYEES {
         integer id PK
-        integer user_id FK,UK
+        integer user_id FK "unique"
         varchar employee_code UK
         varchar department
         varchar job_title
@@ -276,7 +276,7 @@ erDiagram
 
     RECEIPTS {
         varchar receipt_no PK
-        integer session_id FK,UK
+        integer session_id FK "unique"
         integer pricing_rule_id FK
         integer tax_rate_id FK
         timestamp issued_at
