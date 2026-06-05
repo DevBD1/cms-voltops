@@ -7,7 +7,11 @@ export type LogFields = Record<string, LogValue>;
 const debugValues = new Set(['true', '1', 'yes', 'debug']);
 
 export function isApiDebugEnabled(): boolean {
-  return debugValues.has(String(process.env.API_DEBUG ?? '').trim().toLowerCase());
+  return debugValues.has(
+    String(process.env.API_DEBUG ?? '')
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function formatFields(fields: LogFields = {}): string {
@@ -18,7 +22,12 @@ function formatFields(fields: LogFields = {}): string {
   return formatted.length > 0 ? ` ${formatted.join(' ')}` : '';
 }
 
-function writeLog(level: 'debug' | 'info' | 'error', event: string, fields?: LogFields, force = false): void {
+function writeLog(
+  level: 'debug' | 'info' | 'error',
+  event: string,
+  fields?: LogFields,
+  force = false,
+): void {
   if (!force && !isApiDebugEnabled()) {
     return;
   }
@@ -64,7 +73,9 @@ export function createRequestLogger(): RequestHandler {
     const startedAt = process.hrtime.bigint();
 
     res.on('finish', () => {
-      const durationMs = Number((process.hrtime.bigint() - startedAt) / BigInt(1_000_000));
+      const durationMs = Number(
+        (process.hrtime.bigint() - startedAt) / BigInt(1_000_000),
+      );
 
       logger.debug('api.request', {
         requestId,

@@ -4,10 +4,10 @@ import { AUTH_KEY } from './constants';
 import { supabase } from './supabase';
 
 /** Roles that may access the admin/operations panel. */
-export const ADMIN_ROLES: UserRole[] = ['ADMIN', 'OPERATOR', 'TECHNICIAN'];
+export const ADMIN_ROLES: UserRole[] = ['ADMIN'];
 
 /** Complete set of valid roles; used for runtime validation of server responses. */
-const ALL_ROLES: readonly UserRole[] = ['ADMIN', 'OPERATOR', 'TECHNICIAN', 'CUSTOMER'];
+const ALL_ROLES: readonly UserRole[] = ['ADMIN', 'CUSTOMER'];
 
 export type { AuthSession };
 

@@ -1,6 +1,6 @@
 import { and, eq, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { employees, maintenance, plugs, stations, users } from '../db/schema';
+import { employees, maintenance, stations, users } from '../db/schema';
 import { HttpError } from '../utils/http';
 
 type MaintenanceRow = typeof maintenance.$inferSelect;
@@ -27,7 +27,7 @@ export interface CreateMaintenanceInput {
   employeeId?: number;
   maintenanceType: string;
   description: string;
-  scheduledDate?: string;
+  scheduledDate: string;
 }
 
 export interface UpdateMaintenanceInput {
@@ -38,12 +38,13 @@ export interface UpdateMaintenanceInput {
 }
 
 async function enrich(row: MaintenanceRow): Promise<MaintenanceView> {
-  const [stationRow, plugRow, employeeRow] = await Promise.all([
+  const [stationRow, employeeRow] = await Promise.all([
     row.stationCode
-      ? db.select({ name: stations.name }).from(stations).where(eq(stations.stationCode, row.stationCode)).limit(1)
-      : Promise.resolve([]),
-    row.plugCode
-      ? db.select({ plugCode: plugs.plugCode }).from(plugs).where(eq(plugs.plugCode, row.plugCode)).limit(1)
+      ? db
+          .select({ name: stations.name })
+          .from(stations)
+          .where(eq(stations.stationCode, row.stationCode))
+          .limit(1)
       : Promise.resolve([]),
     row.employeeId
       ? db
@@ -55,11 +56,11 @@ async function enrich(row: MaintenanceRow): Promise<MaintenanceView> {
       : Promise.resolve([]),
   ]);
 
-  const stationName = (stationRow[0] as { name: string } | undefined)?.name ?? null;
-  const technicianName =
-    employeeRow[0]
-      ? `${(employeeRow[0] as { firstName: string; lastName: string }).firstName} ${(employeeRow[0] as { firstName: string; lastName: string }).lastName}`.trim()
-      : null;
+  const stationName =
+    (stationRow[0] as { name: string } | undefined)?.name ?? null;
+  const technicianName = employeeRow[0]
+    ? `${(employeeRow[0] as { firstName: string; lastName: string }).firstName} ${(employeeRow[0] as { firstName: string; lastName: string }).lastName}`.trim()
+    : null;
 
   return {
     id: row.id,
@@ -79,17 +80,27 @@ async function enrich(row: MaintenanceRow): Promise<MaintenanceView> {
 }
 
 export class MaintenanceService {
-  async listMaintenance(filters?: { status?: string; stationCode?: string }): Promise<MaintenanceView[]> {
+  async listMaintenance(filters?: {
+    status?: string;
+    stationCode?: string;
+  }): Promise<MaintenanceView[]> {
     const conditions: SQL[] = [];
-    if (filters?.status) conditions.push(eq(maintenance.status, filters.status));
-    if (filters?.stationCode) conditions.push(eq(maintenance.stationCode, filters.stationCode));
+    if (filters?.status)
+      conditions.push(eq(maintenance.status, filters.status));
+    if (filters?.stationCode)
+      conditions.push(eq(maintenance.stationCode, filters.stationCode));
 
     const query = db.select().from(maintenance).orderBy(maintenance.createdAt);
-    const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+    const rows =
+      conditions.length > 0
+        ? await query.where(and(...conditions))
+        : await query;
     return Promise.all(rows.map(enrich));
   }
 
-  async createMaintenance(input: CreateMaintenanceInput): Promise<MaintenanceView> {
+  async createMaintenance(
+    input: CreateMaintenanceInput,
+  ): Promise<MaintenanceView> {
     const [station] = await db
       .select({ stationCode: stations.stationCode })
       .from(stations)
@@ -102,11 +113,11 @@ export class MaintenanceService {
       .insert(maintenance)
       .values({
         stationCode: input.stationCode,
-        plugCode: input.plugCode ?? null,
-        employeeId: input.employeeId ?? null,
+        plugCode: input.plugCode,
+        employeeId: input.employeeId,
         maintenanceType: input.maintenanceType,
         description: input.description,
-        scheduledDate: input.scheduledDate ?? null,
+        scheduledDate: input.scheduledDate,
         status: 'scheduled',
       })
       .returning();
@@ -114,13 +125,20 @@ export class MaintenanceService {
     return enrich(row);
   }
 
-  async updateMaintenance(id: number, input: UpdateMaintenanceInput): Promise<MaintenanceView> {
+  async updateMaintenance(
+    id: number,
+    input: UpdateMaintenanceInput,
+  ): Promise<MaintenanceView> {
     const [row] = await db
       .update(maintenance)
       .set({
         ...(input.status !== undefined && { status: input.status }),
-        ...(input.completedDate !== undefined && { completedDate: input.completedDate }),
-        ...(input.description !== undefined && { description: input.description }),
+        ...(input.completedDate !== undefined && {
+          completedDate: input.completedDate,
+        }),
+        ...(input.description !== undefined && {
+          description: input.description,
+        }),
         ...(input.employeeId !== undefined && { employeeId: input.employeeId }),
         updatedAt: new Date(),
       })

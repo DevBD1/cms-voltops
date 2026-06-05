@@ -1,9 +1,24 @@
 import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { employees as employeesTable, maintenance as maintenanceTable, plugs as plugsTable, receipts, sessions, stationEmployees as stationEmployeesTable, stations, tickets as ticketsTable, users } from '../db/schema';
+import {
+  employees as employeesTable,
+  maintenance as maintenanceTable,
+  plugs as plugsTable,
+  receipts,
+  sessions,
+  stationEmployees as stationEmployeesTable,
+  stations,
+  tickets as ticketsTable,
+  users,
+} from '../db/schema';
 import { AuthService } from '../services/auth.service';
-import { CatalogService, deriveCurrentType, type StationSummary, type PlugDetails } from '../services/catalog.service';
+import {
+  CatalogService,
+  deriveCurrentType,
+  type StationSummary,
+  type PlugDetails,
+} from '../services/catalog.service';
 import { MaintenanceService } from '../services/maintenance.service';
 import { SessionService } from '../services/session.service';
 import { TicketService } from '../services/ticket.service';
@@ -13,7 +28,12 @@ import { logger } from '../utils/logger';
 
 // ─── Status normalisation helpers ─────────────────────────────────────────────
 
-const allowedPlugStatuses = ['available', 'in_use', 'fault', 'offline'] as const;
+const allowedPlugStatuses = [
+  'available',
+  'in_use',
+  'fault',
+  'offline',
+] as const;
 const allowedStationStatuses = ['active', 'maintenance', 'offline'] as const;
 type RawPlugStatus = (typeof allowedPlugStatuses)[number];
 type RawStationStatus = (typeof allowedStationStatuses)[number];
@@ -22,13 +42,16 @@ function normalizeStationStatus(s: string): 'ACTIVE' | 'INACTIVE' {
   return s === 'active' ? 'ACTIVE' : 'INACTIVE';
 }
 
-function normalizePlugStatus(s: string): 'AVAILABLE' | 'CHARGING' | 'FAULTY' | 'RESERVED' {
-  const map: Record<string, 'AVAILABLE' | 'CHARGING' | 'FAULTY' | 'RESERVED'> = {
-    available: 'AVAILABLE',
-    in_use: 'CHARGING',
-    fault: 'FAULTY',
-    offline: 'RESERVED',
-  };
+function normalizePlugStatus(
+  s: string,
+): 'AVAILABLE' | 'CHARGING' | 'FAULTY' | 'RESERVED' {
+  const map: Record<string, 'AVAILABLE' | 'CHARGING' | 'FAULTY' | 'RESERVED'> =
+    {
+      available: 'AVAILABLE',
+      in_use: 'CHARGING',
+      fault: 'FAULTY',
+      offline: 'RESERVED',
+    };
   return map[s] ?? 'AVAILABLE';
 }
 
@@ -71,8 +94,10 @@ function toWebStation(s: StationSummary) {
     latitude: String(s.latitude),
     longitude: String(s.longitude),
     status: normalizeStationStatus(s.status),
-    createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
-    updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt,
+    createdAt:
+      s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+    updatedAt:
+      s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt,
     totalPlugs: s.totalPlugs,
     availablePlugs: s.availablePlugs,
     faultyPlugs: s.faultyPlugs,
@@ -89,7 +114,8 @@ function toWebPlug(p: PlugDetails) {
     powerKw: String(p.powerKw),
     currentType: deriveCurrentType(p.plugType),
     status: normalizePlugStatus(p.status),
-    updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
+    updatedAt:
+      p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
   };
 }
 
@@ -108,7 +134,10 @@ export function createAdminRouter(
   // ── Admin auth guard ──────────────────────────────────────────────────────
   router.use(async (req, res, next) => {
     try {
-      const auth = await authService.authenticateAdmin(req.header('authorization'), res.locals.requestId);
+      const auth = await authService.authenticateAdmin(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
       res.locals.auth = auth;
       next();
     } catch (error) {
@@ -119,22 +148,27 @@ export function createAdminRouter(
   // ── Dashboard ─────────────────────────────────────────────────────────────
   router.get('/dashboard', async (_req, res) => {
     try {
-      const [stationRows, plugRows, activeSessions, ticketRows] = await Promise.all([
-        catalogService.listStations(),
-        catalogService.listPlugs(),
-        sessionService.listSessions({ status: 'active' }),
-        ticketService.listTickets(),
-      ]);
+      const [stationRows, plugRows, activeSessions, ticketRows] =
+        await Promise.all([
+          catalogService.listStations(),
+          catalogService.listPlugs(),
+          sessionService.listSessions({ status: 'active' }),
+          ticketService.listTickets(),
+        ]);
       const openTickets = ticketRows.filter((t) => t.status !== 'resolved');
 
-      logger.debug('admin.dashboard_loaded', { requestId: res.locals.requestId });
+      logger.debug('admin.dashboard_loaded', {
+        requestId: res.locals.requestId,
+      });
 
       res.json({
         data: {
           stations: stationRows.length,
-          activeStations: stationRows.filter((s) => s.status === 'active').length,
+          activeStations: stationRows.filter((s) => s.status === 'active')
+            .length,
           plugs: plugRows.length,
-          availablePlugs: plugRows.filter((p) => p.status === 'available').length,
+          availablePlugs: plugRows.filter((p) => p.status === 'available')
+            .length,
           activeSessions: activeSessions.length,
           openTickets: openTickets.length,
         },
@@ -170,17 +204,26 @@ export function createAdminRouter(
 
   router.post('/stations', async (req, res) => {
     try {
-      const { stationCode, name, city, district, latitude, longitude } = req.body as {
-        stationCode?: string;
-        name?: string;
-        city?: string;
-        district?: string;
-        latitude?: number;
-        longitude?: number;
-      };
+      const { stationCode, name, city, district, latitude, longitude } =
+        req.body as {
+          stationCode?: string;
+          name?: string;
+          city?: string;
+          district?: string;
+          latitude?: number;
+          longitude?: number;
+        };
 
-      if (!stationCode || !name || !city || latitude === undefined || longitude === undefined) {
-        res.status(400).json({ error: 'stationCode, name, city, latitude ve longitude gereklidir.' });
+      if (
+        !stationCode ||
+        !name ||
+        !city ||
+        latitude === undefined ||
+        longitude === undefined
+      ) {
+        res.status(400).json({
+          error: 'stationCode, name, city, latitude ve longitude gereklidir.',
+        });
         return;
       }
 
@@ -198,7 +241,10 @@ export function createAdminRouter(
         .returning();
 
       const summary = await catalogService.getStation(created.stationCode);
-      logger.debug('admin.station_created', { requestId: res.locals.requestId, stationCode: created.stationCode });
+      logger.debug('admin.station_created', {
+        requestId: res.locals.requestId,
+        stationCode: created.stationCode,
+      });
       res.status(201).json({ data: toWebStation(summary) });
     } catch (error) {
       sendError(res, error);
@@ -207,16 +253,19 @@ export function createAdminRouter(
 
   router.patch('/stations/:stationCode', async (req, res) => {
     try {
-      const { name, city, district, latitude, longitude, status } = req.body as {
-        name?: string;
-        city?: string;
-        district?: string;
-        latitude?: number;
-        longitude?: number;
-        status?: string;
-      };
+      const { name, city, district, latitude, longitude, status } =
+        req.body as {
+          name?: string;
+          city?: string;
+          district?: string;
+          latitude?: number;
+          longitude?: number;
+          status?: string;
+        };
 
-      const updateData: Partial<typeof stations.$inferInsert> = { updatedAt: new Date() };
+      const updateData: Partial<typeof stations.$inferInsert> = {
+        updatedAt: new Date(),
+      };
       if (name !== undefined) updateData.name = name;
       if (city !== undefined) updateData.city = city;
       if (district !== undefined) updateData.district = district;
@@ -225,7 +274,9 @@ export function createAdminRouter(
       if (status !== undefined) {
         const raw = status.toLowerCase() as RawStationStatus;
         if (!allowedStationStatuses.includes(raw)) {
-          res.status(400).json({ error: `status must be one of: ${allowedStationStatuses.join(', ')}` });
+          res.status(400).json({
+            error: `status must be one of: ${allowedStationStatuses.join(', ')}`,
+          });
           return;
         }
         updateData.status = raw;
@@ -243,7 +294,10 @@ export function createAdminRouter(
       }
 
       const summary = await catalogService.getStation(updated.stationCode);
-      logger.debug('admin.station_updated', { requestId: res.locals.requestId, stationCode: updated.stationCode });
+      logger.debug('admin.station_updated', {
+        requestId: res.locals.requestId,
+        stationCode: updated.stationCode,
+      });
       res.json({ data: toWebStation(summary) });
     } catch (error) {
       sendError(res, error);
@@ -271,14 +325,20 @@ export function createAdminRouter(
         .limit(1);
       if (hasMaint) {
         res.status(409).json({
-          error: 'Bu istasyona ait bakım kayıtları var. İstasyonu silmek yerine durum değiştiriniz.',
+          error:
+            'Bu istasyona ait bakım kayıtları var. İstasyonu silmek yerine durum değiştiriniz.',
         });
         return;
       }
 
       // Auto-clean station_employees and nullify ticket references
-      await db.delete(stationEmployeesTable).where(eq(stationEmployeesTable.stationCode, stationCode));
-      await db.update(ticketsTable).set({ stationCode: null }).where(eq(ticketsTable.stationCode, stationCode));
+      await db
+        .delete(stationEmployeesTable)
+        .where(eq(stationEmployeesTable.stationCode, stationCode));
+      await db
+        .update(ticketsTable)
+        .set({ stationCode: null })
+        .where(eq(ticketsTable.stationCode, stationCode));
 
       const [deleted] = await db
         .delete(stations)
@@ -290,7 +350,10 @@ export function createAdminRouter(
         return;
       }
 
-      logger.debug('admin.station_deleted', { requestId: res.locals.requestId, stationCode });
+      logger.debug('admin.station_deleted', {
+        requestId: res.locals.requestId,
+        stationCode,
+      });
       res.json({ data: { stationCode } });
     } catch (error) {
       sendError(res, error);
@@ -299,13 +362,24 @@ export function createAdminRouter(
 
   router.patch('/stations/:stationCode/status', async (req, res) => {
     try {
-      const status = String(req.body.status ?? '').toLowerCase() as RawStationStatus;
+      const status = String(
+        req.body.status ?? '',
+      ).toLowerCase() as RawStationStatus;
       if (!allowedStationStatuses.includes(status)) {
-        res.status(400).json({ error: `status must be one of: ${allowedStationStatuses.join(', ')}` });
+        res.status(400).json({
+          error: `status must be one of: ${allowedStationStatuses.join(', ')}`,
+        });
         return;
       }
-      const station = await catalogService.setStationStatus(req.params.stationCode, status);
-      logger.debug('admin.station_status_updated', { requestId: res.locals.requestId, stationCode: req.params.stationCode, status });
+      const station = await catalogService.setStationStatus(
+        req.params.stationCode,
+        status,
+      );
+      logger.debug('admin.station_status_updated', {
+        requestId: res.locals.requestId,
+        stationCode: req.params.stationCode,
+        status,
+      });
       res.json({ data: toWebStation(station) });
     } catch (error) {
       sendError(res, error);
@@ -348,7 +422,10 @@ export function createAdminRouter(
 
   router.get('/employees/:employeeId', async (req, res) => {
     try {
-      const employeeId = parseRequiredNumber(req.params.employeeId, 'employeeId');
+      const employeeId = parseRequiredNumber(
+        req.params.employeeId,
+        'employeeId',
+      );
 
       const [emp] = await db
         .select({
@@ -371,49 +448,62 @@ export function createAdminRouter(
         return;
       }
 
-      const [stationAssignments, maintAssignments, ticketAssignments] = await Promise.all([
-        db.select({
-          stationCode: stationEmployeesTable.stationCode,
-          stationName: stations.name,
-          assignmentRole: stationEmployeesTable.assignmentRole,
-          assignedAt: stationEmployeesTable.assignedAt,
-        })
-          .from(stationEmployeesTable)
-          .innerJoin(stations, eq(stationEmployeesTable.stationCode, stations.stationCode))
-          .where(eq(stationEmployeesTable.employeeId, employeeId)),
+      const [stationAssignments, maintAssignments, ticketAssignments] =
+        await Promise.all([
+          db
+            .select({
+              stationCode: stationEmployeesTable.stationCode,
+              stationName: stations.name,
+              assignmentRole: stationEmployeesTable.assignmentRole,
+              assignedAt: stationEmployeesTable.assignedAt,
+            })
+            .from(stationEmployeesTable)
+            .innerJoin(
+              stations,
+              eq(stationEmployeesTable.stationCode, stations.stationCode),
+            )
+            .where(eq(stationEmployeesTable.employeeId, employeeId)),
 
-        db.select({
-          id: maintenanceTable.id,
-          stationCode: maintenanceTable.stationCode,
-          stationName: stations.name,
-          plugCode: maintenanceTable.plugCode,
-          maintenanceType: maintenanceTable.maintenanceType,
-          description: maintenanceTable.description,
-          status: maintenanceTable.status,
-          scheduledDate: maintenanceTable.scheduledDate,
-          completedDate: maintenanceTable.completedDate,
-        })
-          .from(maintenanceTable)
-          .leftJoin(stations, eq(maintenanceTable.stationCode, stations.stationCode))
-          .where(eq(maintenanceTable.employeeId, employeeId))
-          .orderBy(maintenanceTable.scheduledDate),
+          db
+            .select({
+              id: maintenanceTable.id,
+              stationCode: maintenanceTable.stationCode,
+              stationName: stations.name,
+              plugCode: maintenanceTable.plugCode,
+              maintenanceType: maintenanceTable.maintenanceType,
+              description: maintenanceTable.description,
+              status: maintenanceTable.status,
+              scheduledDate: maintenanceTable.scheduledDate,
+              completedDate: maintenanceTable.completedDate,
+            })
+            .from(maintenanceTable)
+            .leftJoin(
+              stations,
+              eq(maintenanceTable.stationCode, stations.stationCode),
+            )
+            .where(eq(maintenanceTable.employeeId, employeeId))
+            .orderBy(maintenanceTable.scheduledDate),
 
-        db.select({
-          id: ticketsTable.id,
-          title: ticketsTable.title,
-          status: ticketsTable.status,
-          priority: ticketsTable.priority,
-          stationName: stations.name,
-          userFirstName: users.firstName,
-          userLastName: users.lastName,
-          createdAt: ticketsTable.createdAt,
-        })
-          .from(ticketsTable)
-          .innerJoin(users, eq(ticketsTable.userId, users.id))
-          .leftJoin(stations, eq(ticketsTable.stationCode, stations.stationCode))
-          .where(eq(ticketsTable.assignedEmployeeId, employeeId))
-          .orderBy(ticketsTable.createdAt),
-      ]);
+          db
+            .select({
+              id: ticketsTable.id,
+              title: ticketsTable.title,
+              status: ticketsTable.status,
+              priority: ticketsTable.priority,
+              stationName: stations.name,
+              userFirstName: users.firstName,
+              userLastName: users.lastName,
+              createdAt: ticketsTable.createdAt,
+            })
+            .from(ticketsTable)
+            .innerJoin(users, eq(ticketsTable.userId, users.id))
+            .leftJoin(
+              stations,
+              eq(ticketsTable.stationCode, stations.stationCode),
+            )
+            .where(eq(ticketsTable.assignedEmployeeId, employeeId))
+            .orderBy(ticketsTable.createdAt),
+        ]);
 
       res.json({
         data: {
@@ -429,7 +519,10 @@ export function createAdminRouter(
             stationCode: s.stationCode,
             stationName: s.stationName,
             assignmentRole: s.assignmentRole,
-            assignedAt: s.assignedAt instanceof Date ? s.assignedAt.toISOString() : s.assignedAt,
+            assignedAt:
+              s.assignedAt instanceof Date
+                ? s.assignedAt.toISOString()
+                : s.assignedAt,
           })),
           assignedMaintenance: maintAssignments.map((m) => ({
             id: m.id,
@@ -448,8 +541,13 @@ export function createAdminRouter(
             status: normalizeTicketStatus(t.status),
             priority: normalizeTicketPriority(t.priority),
             stationName: t.stationName ?? null,
-            userFullName: `${t.userFirstName ?? ''} ${t.userLastName ?? ''}`.trim() || 'Unknown',
-            createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : t.createdAt,
+            userFullName:
+              `${t.userFirstName ?? ''} ${t.userLastName ?? ''}`.trim() ||
+              'Unknown',
+            createdAt:
+              t.createdAt instanceof Date
+                ? t.createdAt.toISOString()
+                : t.createdAt,
           })),
         },
       });
@@ -460,22 +558,28 @@ export function createAdminRouter(
 
   router.post('/employees', async (req, res) => {
     try {
-      const { userId, employeeCode, department, jobTitle, hireDate } = req.body as {
-        userId?: number;
-        employeeCode?: string;
-        department?: string;
-        jobTitle?: string;
-        hireDate?: string;
-      };
+      const { userId, employeeCode, department, jobTitle, hireDate } =
+        req.body as {
+          userId?: number;
+          employeeCode?: string;
+          department?: string;
+          jobTitle?: string;
+          hireDate?: string;
+        };
 
       if (!userId || !employeeCode || !department || !jobTitle || !hireDate) {
         res.status(400).json({
-          error: 'userId, employeeCode, department, jobTitle ve hireDate gereklidir.',
+          error:
+            'userId, employeeCode, department, jobTitle ve hireDate gereklidir.',
         });
         return;
       }
 
-      const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
       if (!user) {
         res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
         return;
@@ -490,26 +594,58 @@ export function createAdminRouter(
 
       if (existing) {
         if (existing.status === 'active') {
-          res.status(409).json({ error: 'Bu kullanıcı zaten aktif bir çalışan.' });
+          res
+            .status(409)
+            .json({ error: 'Bu kullanıcı zaten aktif bir çalışan.' });
           return;
         }
         const [reactivated] = await db
           .update(employeesTable)
-          .set({ status: 'active', department, jobTitle, updatedAt: new Date() })
+          .set({
+            status: 'active',
+            department,
+            jobTitle,
+            updatedAt: new Date(),
+          })
           .where(eq(employeesTable.userId, userId))
           .returning();
-        logger.debug('admin.employee_reactivated', { requestId: res.locals.requestId, employeeId: reactivated.id });
-        res.json({ data: { ...reactivated, fullName: `${user.firstName} ${user.lastName}`.trim(), email: user.email } });
+        logger.debug('admin.employee_reactivated', {
+          requestId: res.locals.requestId,
+          employeeId: reactivated.id,
+        });
+        res.json({
+          data: {
+            ...reactivated,
+            fullName: `${user.firstName} ${user.lastName}`.trim(),
+            email: user.email,
+          },
+        });
         return;
       }
 
       const [created] = await db
         .insert(employeesTable)
-        .values({ userId, employeeCode, department, jobTitle, hireDate, status: 'active' })
+        .values({
+          userId,
+          employeeCode,
+          department,
+          jobTitle,
+          hireDate,
+          status: 'active',
+        })
         .returning();
 
-      logger.debug('admin.employee_created', { requestId: res.locals.requestId, employeeId: created.id });
-      res.status(201).json({ data: { ...created, fullName: `${user.firstName} ${user.lastName}`.trim(), email: user.email } });
+      logger.debug('admin.employee_created', {
+        requestId: res.locals.requestId,
+        employeeId: created.id,
+      });
+      res.status(201).json({
+        data: {
+          ...created,
+          fullName: `${user.firstName} ${user.lastName}`.trim(),
+          email: user.email,
+        },
+      });
     } catch (error) {
       sendError(res, error);
     }
@@ -517,14 +653,19 @@ export function createAdminRouter(
 
   router.patch('/employees/:employeeId', async (req, res) => {
     try {
-      const employeeId = parseRequiredNumber(req.params.employeeId, 'employeeId');
+      const employeeId = parseRequiredNumber(
+        req.params.employeeId,
+        'employeeId',
+      );
       const { status, department, jobTitle } = req.body as {
         status?: string;
         department?: string;
         jobTitle?: string;
       };
 
-      const updateData: Partial<typeof employeesTable.$inferInsert> = { updatedAt: new Date() };
+      const updateData: Partial<typeof employeesTable.$inferInsert> = {
+        updatedAt: new Date(),
+      };
       if (status !== undefined) updateData.status = status;
       if (department !== undefined) updateData.department = department;
       if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
@@ -540,10 +681,23 @@ export function createAdminRouter(
         return;
       }
 
-      const [user] = await db.select().from(users).where(eq(users.id, updated.userId)).limit(1);
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, updated.userId))
+        .limit(1);
 
-      logger.debug('admin.employee_updated', { requestId: res.locals.requestId, employeeId });
-      res.json({ data: { ...updated, fullName: user ? `${user.firstName} ${user.lastName}`.trim() : '', email: user?.email ?? '' } });
+      logger.debug('admin.employee_updated', {
+        requestId: res.locals.requestId,
+        employeeId,
+      });
+      res.json({
+        data: {
+          ...updated,
+          fullName: user ? `${user.firstName} ${user.lastName}`.trim() : '',
+          email: user?.email ?? '',
+        },
+      });
     } catch (error) {
       sendError(res, error);
     }
@@ -552,8 +706,12 @@ export function createAdminRouter(
   // ── Plugs ─────────────────────────────────────────────────────────────────
   router.get('/plugs', async (req, res) => {
     try {
-      const stationCode = req.query.stationCode === undefined ? undefined : String(req.query.stationCode);
-      const status = req.query.status === undefined ? undefined : String(req.query.status);
+      const stationCode =
+        req.query.stationCode === undefined
+          ? undefined
+          : String(req.query.stationCode);
+      const status =
+        req.query.status === undefined ? undefined : String(req.query.status);
       const rows = await catalogService.listPlugs({ stationCode, status });
       res.json({ data: rows.map(toWebPlug) });
     } catch (error) {
@@ -563,7 +721,9 @@ export function createAdminRouter(
 
   router.get('/plugs/by-station/:stationCode', async (req, res) => {
     try {
-      const rows = await catalogService.listPlugs({ stationCode: req.params.stationCode });
+      const rows = await catalogService.listPlugs({
+        stationCode: req.params.stationCode,
+      });
       res.json({ data: rows.map(toWebPlug) });
     } catch (error) {
       sendError(res, error);
@@ -574,11 +734,17 @@ export function createAdminRouter(
     try {
       const raw = String(req.body.status ?? '').toLowerCase() as RawPlugStatus;
       if (!allowedPlugStatuses.includes(raw)) {
-        res.status(400).json({ error: `status must be one of: ${allowedPlugStatuses.join(', ')}` });
+        res.status(400).json({
+          error: `status must be one of: ${allowedPlugStatuses.join(', ')}`,
+        });
         return;
       }
       const plug = await catalogService.setPlugStatus(req.params.plugCode, raw);
-      logger.debug('admin.plug_status_updated', { requestId: res.locals.requestId, plugCode: req.params.plugCode, status: raw });
+      logger.debug('admin.plug_status_updated', {
+        requestId: res.locals.requestId,
+        plugCode: req.params.plugCode,
+        status: raw,
+      });
       res.json({ data: toWebPlug(plug) });
     } catch (error) {
       sendError(res, error);
@@ -595,7 +761,9 @@ export function createAdminRouter(
       };
 
       if (!plugCode || !stationCode || !plugType || powerKw === undefined) {
-        res.status(400).json({ error: 'plugCode, stationCode, plugType ve powerKw gereklidir.' });
+        res.status(400).json({
+          error: 'plugCode, stationCode, plugType ve powerKw gereklidir.',
+        });
         return;
       }
 
@@ -612,7 +780,10 @@ export function createAdminRouter(
       const created = plugs.find((p) => p.plugCode === plugCode.trim());
       if (!created) throw new Error('Plug not found after creation');
 
-      logger.debug('admin.plug_created', { requestId: res.locals.requestId, plugCode: plugCode.trim() });
+      logger.debug('admin.plug_created', {
+        requestId: res.locals.requestId,
+        plugCode: plugCode.trim(),
+      });
       res.status(201).json({ data: toWebPlug(created) });
     } catch (error) {
       sendError(res, error);
@@ -622,18 +793,29 @@ export function createAdminRouter(
   // ── Sessions ─────────────────────────────────────────────────────────────
   router.get('/sessions', async (req, res) => {
     try {
-      const status = req.query.status === undefined ? undefined : String(req.query.status).toLowerCase();
+      const status =
+        req.query.status === undefined
+          ? undefined
+          : String(req.query.status).toLowerCase();
       const rows = await sessionService.listSessions({ status });
       res.json({
         data: rows.map((s) => ({
           id: s.id,
           userId: s.userId,
-          userFullName: s.user ? `${s.user.firstName} ${s.user.lastName}`.trim() : 'Unknown',
+          userFullName: s.user
+            ? `${s.user.firstName} ${s.user.lastName}`.trim()
+            : 'Unknown',
           plugCode: s.plugCode,
           plugType: s.plug?.plugType ?? '',
           stationName: s.plug?.station.name ?? '',
-          startedAt: s.startedAt instanceof Date ? s.startedAt.toISOString() : s.startedAt,
-          endedAt: s.endedAt instanceof Date ? s.endedAt.toISOString() : (s.endedAt ?? null),
+          startedAt:
+            s.startedAt instanceof Date
+              ? s.startedAt.toISOString()
+              : s.startedAt,
+          endedAt:
+            s.endedAt instanceof Date
+              ? s.endedAt.toISOString()
+              : (s.endedAt ?? null),
           energyKwh: s.energyKwh ?? null,
           totalPrice: s.totalPrice ?? null,
           status: normalizeSessionStatus(s.status),
@@ -652,8 +834,15 @@ export function createAdminRouter(
         res.status(400).json({ error: 'plugCode gereklidir.' });
         return;
       }
-      const session = await sessionService.startSession(auth.appUser.id, plugCode, req.body.vehiclePlateNumber);
-      logger.debug('admin.session_started', { requestId: res.locals.requestId, sessionId: session.id });
+      const session = await sessionService.startSession(
+        auth.appUser.id,
+        plugCode,
+        req.body.vehiclePlateNumber,
+      );
+      logger.debug('admin.session_started', {
+        requestId: res.locals.requestId,
+        sessionId: session.id,
+      });
       res.status(201).json({ data: session });
     } catch (error) {
       sendError(res, error);
@@ -666,7 +855,10 @@ export function createAdminRouter(
       const energyKwh = parseRequiredNumber(req.body.energyKwh, 'energyKwh');
       // Admin can end any session (no userId restriction)
       const session = await sessionService.endSession(sessionId, energyKwh);
-      logger.debug('admin.session_ended', { requestId: res.locals.requestId, sessionId: session.id });
+      logger.debug('admin.session_ended', {
+        requestId: res.locals.requestId,
+        sessionId: session.id,
+      });
       res.json({ data: session });
     } catch (error) {
       sendError(res, error);
@@ -703,7 +895,8 @@ export function createAdminRouter(
           taxAmount: String(r.taxAmount),
           totalAmount: String(r.totalAmount),
           currency: r.currency,
-          issuedAt: r.issuedAt instanceof Date ? r.issuedAt.toISOString() : r.issuedAt,
+          issuedAt:
+            r.issuedAt instanceof Date ? r.issuedAt.toISOString() : r.issuedAt,
         })),
       });
     } catch (error) {
@@ -731,7 +924,9 @@ export function createAdminRouter(
         .limit(1);
 
       const plugRow = session
-        ? await catalogService.listPlugs({ stationCode: undefined }).then((ps) => ps.find((p) => p.plugCode === session.plugCode))
+        ? await catalogService
+            .listPlugs({ stationCode: undefined })
+            .then((ps) => ps.find((p) => p.plugCode === session.plugCode))
         : undefined;
 
       res.json({
@@ -746,7 +941,10 @@ export function createAdminRouter(
           taxAmount: String(row.taxAmount),
           totalAmount: String(row.totalAmount),
           currency: row.currency,
-          issuedAt: row.issuedAt instanceof Date ? row.issuedAt.toISOString() : row.issuedAt,
+          issuedAt:
+            row.issuedAt instanceof Date
+              ? row.issuedAt.toISOString()
+              : row.issuedAt,
         },
       });
     } catch (error) {
@@ -758,7 +956,10 @@ export function createAdminRouter(
   router.get('/users', async (_req, res) => {
     try {
       const userList = await userService.listUsers();
-      logger.debug('admin.users_listed', { requestId: res.locals.requestId, count: userList.length });
+      logger.debug('admin.users_listed', {
+        requestId: res.locals.requestId,
+        count: userList.length,
+      });
       res.json({ data: userList });
     } catch (error) {
       sendError(res, error);
@@ -785,7 +986,9 @@ export function createAdminRouter(
       };
 
       if (!firstName || !lastName || !email) {
-        res.status(400).json({ error: 'firstName, lastName ve email gereklidir.' });
+        res
+          .status(400)
+          .json({ error: 'firstName, lastName ve email gereklidir.' });
         return;
       }
 
@@ -801,7 +1004,10 @@ export function createAdminRouter(
         })
         .returning();
 
-      logger.debug('admin.user_created', { requestId: res.locals.requestId, userId: created.id });
+      logger.debug('admin.user_created', {
+        requestId: res.locals.requestId,
+        userId: created.id,
+      });
       res.status(201).json({ data: await userService.getUser(created.id) });
     } catch (error) {
       sendError(res, error);
@@ -818,8 +1024,16 @@ export function createAdminRouter(
         isActive?: boolean;
       };
 
-      const updated = await userService.updateUser(userId, { firstName, lastName, phone, isActive });
-      logger.debug('admin.user_updated', { requestId: res.locals.requestId, userId });
+      const updated = await userService.updateUser(userId, {
+        firstName,
+        lastName,
+        phone,
+        isActive,
+      });
+      logger.debug('admin.user_updated', {
+        requestId: res.locals.requestId,
+        userId,
+      });
       res.json({ data: updated });
     } catch (error) {
       sendError(res, error);
@@ -829,10 +1043,20 @@ export function createAdminRouter(
   // ── Maintenance ───────────────────────────────────────────────────────────
   router.get('/maintenance', async (req, res) => {
     try {
-      const status = req.query.status === undefined ? undefined : String(req.query.status);
-      const stationCode = req.query.stationCode === undefined ? undefined : String(req.query.stationCode);
-      const records = await maintenanceService.listMaintenance({ status, stationCode });
-      logger.debug('admin.maintenance_listed', { requestId: res.locals.requestId, count: records.length });
+      const status =
+        req.query.status === undefined ? undefined : String(req.query.status);
+      const stationCode =
+        req.query.stationCode === undefined
+          ? undefined
+          : String(req.query.stationCode);
+      const records = await maintenanceService.listMaintenance({
+        status,
+        stationCode,
+      });
+      logger.debug('admin.maintenance_listed', {
+        requestId: res.locals.requestId,
+        count: records.length,
+      });
       res.json({ data: records });
     } catch (error) {
       sendError(res, error);
@@ -841,7 +1065,14 @@ export function createAdminRouter(
 
   router.post('/maintenance', async (req, res) => {
     try {
-      const { stationCode, plugCode, employeeId, maintenanceType, description, scheduledDate } = req.body as {
+      const {
+        stationCode,
+        plugCode,
+        employeeId,
+        maintenanceType,
+        description,
+        scheduledDate,
+      } = req.body as {
         stationCode?: string;
         plugCode?: string;
         employeeId?: number;
@@ -851,7 +1082,10 @@ export function createAdminRouter(
       };
 
       if (!stationCode || !description || !maintenanceType || !scheduledDate) {
-        res.status(400).json({ error: 'stationCode, maintenanceType, description ve scheduledDate gereklidir.' });
+        res.status(400).json({
+          error:
+            'stationCode, maintenanceType, description ve scheduledDate gereklidir.',
+        });
         return;
       }
 
@@ -864,7 +1098,10 @@ export function createAdminRouter(
         scheduledDate,
       });
 
-      logger.debug('admin.maintenance_created', { requestId: res.locals.requestId, id: record.id });
+      logger.debug('admin.maintenance_created', {
+        requestId: res.locals.requestId,
+        id: record.id,
+      });
       res.status(201).json({ data: record });
     } catch (error) {
       sendError(res, error);
@@ -873,7 +1110,10 @@ export function createAdminRouter(
 
   router.patch('/maintenance/:maintenanceId', async (req, res) => {
     try {
-      const maintenanceId = parseRequiredNumber(req.params.maintenanceId, 'maintenanceId');
+      const maintenanceId = parseRequiredNumber(
+        req.params.maintenanceId,
+        'maintenanceId',
+      );
       const { status, completedDate, description, employeeId } = req.body as {
         status?: string;
         completedDate?: string;
@@ -881,8 +1121,16 @@ export function createAdminRouter(
         employeeId?: number;
       };
 
-      const record = await maintenanceService.updateMaintenance(maintenanceId, { status, completedDate, description, employeeId });
-      logger.debug('admin.maintenance_updated', { requestId: res.locals.requestId, id: maintenanceId });
+      const record = await maintenanceService.updateMaintenance(maintenanceId, {
+        status,
+        completedDate,
+        description,
+        employeeId,
+      });
+      logger.debug('admin.maintenance_updated', {
+        requestId: res.locals.requestId,
+        id: maintenanceId,
+      });
       res.json({ data: record });
     } catch (error) {
       sendError(res, error);
@@ -892,7 +1140,8 @@ export function createAdminRouter(
   // ── Tickets ───────────────────────────────────────────────────────────────
   router.get('/tickets', async (req, res) => {
     try {
-      const status = req.query.status === undefined ? undefined : String(req.query.status);
+      const status =
+        req.query.status === undefined ? undefined : String(req.query.status);
 
       const rows = await db
         .select({
@@ -919,7 +1168,9 @@ export function createAdminRouter(
       const data = rows.map((r) => ({
         id: r.id,
         userId: r.userId,
-        userFullName: `${r.userFirstName ?? ''} ${r.userLastName ?? ''}`.trim() || 'Unknown',
+        userFullName:
+          `${r.userFirstName ?? ''} ${r.userLastName ?? ''}`.trim() ||
+          'Unknown',
         stationCode: r.stationCode,
         stationName: r.stationName ?? null,
         assignedEmployeeId: r.assignedEmployeeId ?? null,
@@ -927,11 +1178,16 @@ export function createAdminRouter(
         description: r.description,
         priority: normalizeTicketPriority(r.priority),
         status: normalizeTicketStatus(r.status),
-        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
-        updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+        createdAt:
+          r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+        updatedAt:
+          r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
       }));
 
-      logger.debug('admin.tickets_listed', { requestId: res.locals.requestId, count: data.length });
+      logger.debug('admin.tickets_listed', {
+        requestId: res.locals.requestId,
+        count: data.length,
+      });
       res.json({ data });
     } catch (error) {
       sendError(res, error);
@@ -941,13 +1197,14 @@ export function createAdminRouter(
   router.post('/tickets', async (req, res) => {
     try {
       const auth = res.locals.auth;
-      const { title, description, stationCode, sessionId, priority } = req.body as {
-        title?: string;
-        description?: string;
-        stationCode?: string;
-        sessionId?: number;
-        priority?: string;
-      };
+      const { title, description, stationCode, sessionId, priority } =
+        req.body as {
+          title?: string;
+          description?: string;
+          stationCode?: string;
+          sessionId?: number;
+          priority?: string;
+        };
 
       if (!title || !description) {
         res.status(400).json({ error: 'title ve description gereklidir.' });
@@ -963,7 +1220,10 @@ export function createAdminRouter(
         priority,
       });
 
-      logger.debug('admin.ticket_created', { requestId: res.locals.requestId, ticketId: ticket.id });
+      logger.debug('admin.ticket_created', {
+        requestId: res.locals.requestId,
+        ticketId: ticket.id,
+      });
       res.status(201).json({ data: ticket });
     } catch (error) {
       sendError(res, error);
@@ -977,12 +1237,18 @@ export function createAdminRouter(
         assignedEmployeeId:
           req.body.assignedEmployeeId === undefined
             ? undefined
-            : parseRequiredNumber(req.body.assignedEmployeeId, 'assignedEmployeeId'),
+            : parseRequiredNumber(
+                req.body.assignedEmployeeId,
+                'assignedEmployeeId',
+              ),
         priority: req.body.priority,
         status: req.body.status,
       });
 
-      logger.debug('admin.ticket_updated', { requestId: res.locals.requestId, ticketId: ticket.id });
+      logger.debug('admin.ticket_updated', {
+        requestId: res.locals.requestId,
+        ticketId: ticket.id,
+      });
       res.json({ data: ticket });
     } catch (error) {
       sendError(res, error);

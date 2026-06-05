@@ -26,7 +26,12 @@ export interface PlugDetails extends Plug {
   station: Station;
 }
 
-function distanceKm(fromLatitude: number, fromLongitude: number, toLatitude: number, toLongitude: number): number {
+function distanceKm(
+  fromLatitude: number,
+  fromLongitude: number,
+  toLatitude: number,
+  toLongitude: number,
+): number {
   const earthRadiusKm = 6371;
   const latitudeDelta = ((toLatitude - fromLatitude) * Math.PI) / 180;
   const longitudeDelta = ((toLongitude - fromLongitude) * Math.PI) / 180;
@@ -34,16 +39,37 @@ function distanceKm(fromLatitude: number, fromLongitude: number, toLatitude: num
   const toLatitudeRad = (toLatitude * Math.PI) / 180;
   const halfChord =
     Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(fromLatitudeRad) * Math.cos(toLatitudeRad) * Math.sin(longitudeDelta / 2) ** 2;
+    Math.cos(fromLatitudeRad) *
+      Math.cos(toLatitudeRad) *
+      Math.sin(longitudeDelta / 2) ** 2;
   const clampedHalfChord = Math.min(1, Math.max(0, halfChord));
 
-  return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(clampedHalfChord), Math.sqrt(1 - clampedHalfChord)) * 100) / 100;
+  return (
+    Math.round(
+      earthRadiusKm *
+        2 *
+        Math.atan2(
+          Math.sqrt(clampedHalfChord),
+          Math.sqrt(1 - clampedHalfChord),
+        ) *
+        100,
+    ) / 100
+  );
 }
 
 export class CatalogService {
-  async listStations(options?: { latitude?: number; longitude?: number; radiusKm?: number }): Promise<StationSummary[]> {
-    const [stationRows, plugRows] = await Promise.all([db.select().from(stations), db.select().from(plugs)]);
-    const summaries = stationRows.map((station) => this.toStationSummary(station, plugRows));
+  async listStations(options?: {
+    latitude?: number;
+    longitude?: number;
+    radiusKm?: number;
+  }): Promise<StationSummary[]> {
+    const [stationRows, plugRows] = await Promise.all([
+      db.select().from(stations),
+      db.select().from(plugs),
+    ]);
+    const summaries = stationRows.map((station) =>
+      this.toStationSummary(station, plugRows),
+    );
 
     if (options?.latitude === undefined || options.longitude === undefined) {
       return summaries;
@@ -54,13 +80,20 @@ export class CatalogService {
     return summaries
       .map((station) => ({
         ...station,
-        distanceKm: distanceKm(options.latitude!, options.longitude!, Number(station.latitude), Number(station.longitude)),
+        distanceKm: distanceKm(
+          options.latitude!,
+          options.longitude!,
+          Number(station.latitude),
+          Number(station.longitude),
+        ),
       }))
       .filter((station) => station.distanceKm <= radiusKm)
       .sort((a, b) => a.distanceKm - b.distanceKm);
   }
 
-  async getStation(stationCode: string): Promise<StationSummary & { plugs: PlugDetails[] }> {
+  async getStation(
+    stationCode: string,
+  ): Promise<StationSummary & { plugs: PlugDetails[] }> {
     const station = await this.findStation(stationCode);
 
     return {
@@ -69,7 +102,10 @@ export class CatalogService {
     };
   }
 
-  async listPlugs(filters?: { stationCode?: string; status?: string }): Promise<PlugDetails[]> {
+  async listPlugs(filters?: {
+    stationCode?: string;
+    status?: string;
+  }): Promise<PlugDetails[]> {
     const conditions: SQL[] = [];
 
     if (filters?.stationCode) {
@@ -80,8 +116,14 @@ export class CatalogService {
       conditions.push(eq(plugs.status, filters.status));
     }
 
-    const query = db.select().from(plugs).innerJoin(stations, eq(plugs.stationCode, stations.stationCode));
-    const rows = conditions.length > 0 ? await query.where(and(...conditions)) : await query;
+    const query = db
+      .select()
+      .from(plugs)
+      .innerJoin(stations, eq(plugs.stationCode, stations.stationCode));
+    const rows =
+      conditions.length > 0
+        ? await query.where(and(...conditions))
+        : await query;
 
     return rows.map((row) => ({
       ...row.plugs,
@@ -89,7 +131,10 @@ export class CatalogService {
     }));
   }
 
-  async setStationStatus(stationCode: string, status: StationStatus): Promise<StationSummary> {
+  async setStationStatus(
+    stationCode: string,
+    status: StationStatus,
+  ): Promise<StationSummary> {
     const [station] = await db
       .update(stations)
       .set({ status, updatedAt: new Date() })
@@ -103,8 +148,15 @@ export class CatalogService {
     return this.toStationSummary(station, await db.select().from(plugs));
   }
 
-  async setPlugStatus(plugCode: string, status: PlugStatus): Promise<PlugDetails> {
-    const [plug] = await db.update(plugs).set({ status, updatedAt: new Date() }).where(eq(plugs.plugCode, plugCode)).returning();
+  async setPlugStatus(
+    plugCode: string,
+    status: PlugStatus,
+  ): Promise<PlugDetails> {
+    const [plug] = await db
+      .update(plugs)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(plugs.plugCode, plugCode))
+      .returning();
 
     if (!plug) {
       throw new HttpError(404, 'Plug not found');
@@ -114,7 +166,10 @@ export class CatalogService {
   }
 
   private async findStation(stationCode: string): Promise<Station> {
-    const [station] = await db.select().from(stations).where(eq(stations.stationCode, stationCode));
+    const [station] = await db
+      .select()
+      .from(stations)
+      .where(eq(stations.stationCode, stationCode));
 
     if (!station) {
       throw new HttpError(404, 'Station not found');
@@ -124,20 +179,29 @@ export class CatalogService {
   }
 
   private toStationSummary(station: Station, plugRows: Plug[]): StationSummary {
-    const stationPlugs = plugRows.filter((plug) => plug.stationCode === station.stationCode);
+    const stationPlugs = plugRows.filter(
+      (plug) => plug.stationCode === station.stationCode,
+    );
 
     return {
       ...station,
       totalPlugs: stationPlugs.length,
-      availablePlugs: stationPlugs.filter((plug) => plug.status === 'available').length,
-      faultyPlugs: stationPlugs.filter((plug) => plug.status === 'fault').length,
-      maxPowerKw: Math.max(...stationPlugs.map((plug) => Number(plug.powerKw)), 0),
+      availablePlugs: stationPlugs.filter((plug) => plug.status === 'available')
+        .length,
+      faultyPlugs: stationPlugs.filter((plug) => plug.status === 'fault')
+        .length,
+      maxPowerKw: Math.max(
+        ...stationPlugs.map((plug) => Number(plug.powerKw)),
+        0,
+      ),
       plugTypes: [...new Set(stationPlugs.map((plug) => plug.plugType))],
     };
   }
 
   private toPlugDetails(plug: Plug, stationRows: Station[]): PlugDetails {
-    const station = stationRows.find((item) => item.stationCode === plug.stationCode);
+    const station = stationRows.find(
+      (item) => item.stationCode === plug.stationCode,
+    );
 
     if (!station) {
       throw new HttpError(500, `Plug ${plug.plugCode} has no station`);

@@ -20,7 +20,9 @@ import * as schema from './schema';
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error('DATABASE_URL is required. Set it to the Supabase Postgres connection string.');
+  throw new Error(
+    'DATABASE_URL is required. Set it to the Supabase Postgres connection string.',
+  );
 }
 
 let parsedDatabaseUrl: URL;
@@ -36,7 +38,8 @@ try {
 
 /** Transaction pooler (port 6543) does NOT support prepared statements. */
 const usesTransactionPooler =
-  parsedDatabaseUrl.hostname.endsWith('.pooler.supabase.com') && parsedDatabaseUrl.port === '6543';
+  parsedDatabaseUrl.hostname.endsWith('.pooler.supabase.com') &&
+  parsedDatabaseUrl.port === '6543';
 
 /** Direct connection or session pooler both support prepared statements. */
 const requirePrepare = !usesTransactionPooler;

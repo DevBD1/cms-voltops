@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   date,
@@ -27,8 +28,12 @@ export const users = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     marketingConsent: timestamp('marketing_consent', { withTimezone: true }),
     termsOfService: timestamp('terms_of_service', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     authUserIdx: uniqueIndex('users_auth_user_id_unique').on(table.authUserId),
@@ -49,11 +54,17 @@ export const employees = pgTable(
     jobTitle: varchar('job_title', { length: 100 }).notNull(),
     hireDate: date('hire_date').notNull(),
     status: varchar('status', { length: 30 }).notNull().default('active'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    employeeCodeIdx: uniqueIndex('employees_employee_code_unique').on(table.employeeCode),
+    employeeCodeIdx: uniqueIndex('employees_employee_code_unique').on(
+      table.employeeCode,
+    ),
     userIdx: index('employees_user_id_idx').on(table.userId),
   }),
 );
@@ -102,7 +113,13 @@ export const userVehicles = pgTable(
   },
   (table) => ({
     userIdx: index('user_vehicles_user_id_idx').on(table.userId),
-    vehicleIdx: index('user_vehicles_vehicle_plate_number_idx').on(table.vehiclePlateNumber),
+    vehicleIdx: index('user_vehicles_vehicle_plate_number_idx').on(
+      table.vehiclePlateNumber,
+    ),
+    userVehicleIdx: uniqueIndex('user_vehicles_user_vehicle_unique').on(
+      table.userId,
+      table.vehiclePlateNumber,
+    ),
   }),
 );
 
@@ -114,8 +131,12 @@ export const stations = pgTable('stations', {
   latitude: numeric('latitude', { precision: 10, scale: 6 }).notNull(),
   longitude: numeric('longitude', { precision: 10, scale: 6 }).notNull(),
   status: varchar('status', { length: 30 }).notNull().default('active'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const plugs = pgTable(
@@ -129,8 +150,12 @@ export const plugs = pgTable(
     powerKw: numeric('power_kw', { precision: 8, scale: 2 }).notNull(),
     currentType: varchar('current_type', { length: 10 }).notNull(),
     status: varchar('status', { length: 30 }).notNull().default('available'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     stationIdx: index('plugs_station_code_idx').on(table.stationCode),
@@ -148,11 +173,17 @@ export const stationEmployees = pgTable(
       .notNull()
       .references(() => employees.id),
     assignmentRole: varchar('assignment_role', { length: 80 }).notNull(),
-    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    stationIdx: index('station_employees_station_code_idx').on(table.stationCode),
-    employeeIdx: index('station_employees_employee_id_idx').on(table.employeeId),
+    stationIdx: index('station_employees_station_code_idx').on(
+      table.stationCode,
+    ),
+    employeeIdx: index('station_employees_employee_id_idx').on(
+      table.employeeId,
+    ),
   }),
 );
 
@@ -166,20 +197,31 @@ export const sessions = pgTable(
     plugCode: varchar('plug_code', { length: 60 })
       .notNull()
       .references(() => plugs.plugCode),
-    vehiclePlateNumber: varchar('vehicle_plate_number', { length: 20 }).references(() => vehicles.plateNumber),
+    vehiclePlateNumber: varchar('vehicle_plate_number', {
+      length: 20,
+    }).references(() => vehicles.plateNumber),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
     energyKwh: numeric('energy_kwh', { precision: 10, scale: 3 }),
     durationMinutes: numeric('duration_minutes', { precision: 10, scale: 2 }),
     totalPrice: numeric('total_price', { precision: 10, scale: 2 }),
     status: varchar('status', { length: 30 }).notNull().default('active'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     userIdx: index('sessions_user_id_idx').on(table.userId),
     plugIdx: index('sessions_plug_code_idx').on(table.plugCode),
-    vehicleIdx: index('sessions_vehicle_plate_number_idx').on(table.vehiclePlateNumber),
+    vehicleIdx: index('sessions_vehicle_plate_number_idx').on(
+      table.vehiclePlateNumber,
+    ),
+    activeUserIdx: uniqueIndex('sessions_active_user_unique')
+      .on(table.userId)
+      .where(sql`${table.status} = 'active'`),
   }),
 );
 
@@ -194,9 +236,15 @@ export const receipts = pgTable(
     taxAmount: numeric('tax_amount', { precision: 10, scale: 2 }).notNull(),
     totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
     currency: varchar('currency', { length: 3 }).notNull().default('TRY'),
-    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    issuedAt: timestamp('issued_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     sessionIdx: index('receipts_session_id_idx').on(table.sessionId),
@@ -210,15 +258,21 @@ export const maintenance = pgTable(
     stationCode: varchar('station_code', { length: 40 })
       .notNull()
       .references(() => stations.stationCode),
-    plugCode: varchar('plug_code', { length: 60 }).references(() => plugs.plugCode),
+    plugCode: varchar('plug_code', { length: 60 }).references(
+      () => plugs.plugCode,
+    ),
     employeeId: integer('employee_id').references(() => employees.id),
     maintenanceType: varchar('maintenance_type', { length: 80 }).notNull(),
     description: text('description').notNull(),
     scheduledDate: date('scheduled_date').notNull(),
     completedDate: date('completed_date'),
     status: varchar('status', { length: 30 }).notNull().default('scheduled'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     stationIdx: index('maintenance_station_code_idx').on(table.stationCode),
@@ -234,20 +288,30 @@ export const tickets = pgTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id),
-    stationCode: varchar('station_code', { length: 40 }).references(() => stations.stationCode),
+    stationCode: varchar('station_code', { length: 40 }).references(
+      () => stations.stationCode,
+    ),
     sessionId: integer('session_id').references(() => sessions.id),
-    assignedEmployeeId: integer('assigned_employee_id').references(() => employees.id),
+    assignedEmployeeId: integer('assigned_employee_id').references(
+      () => employees.id,
+    ),
     title: varchar('title', { length: 150 }).notNull(),
     description: text('description').notNull(),
     priority: varchar('priority', { length: 30 }).notNull().default('normal'),
     status: varchar('status', { length: 30 }).notNull().default('open'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
     userIdx: index('tickets_user_id_idx').on(table.userId),
     stationIdx: index('tickets_station_code_idx').on(table.stationCode),
     sessionIdx: index('tickets_session_id_idx').on(table.sessionId),
-    assignedEmployeeIdx: index('tickets_assigned_employee_id_idx').on(table.assignedEmployeeId),
+    assignedEmployeeIdx: index('tickets_assigned_employee_id_idx').on(
+      table.assignedEmployeeId,
+    ),
   }),
 );

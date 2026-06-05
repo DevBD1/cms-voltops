@@ -36,32 +36,50 @@ function createTestApp(authService: { authenticateAdmin: jest.Mock }) {
 describe('createAdminRouter', () => {
   it('returns 401 without an admin bearer token', async () => {
     const app = createTestApp({
-      authenticateAdmin: jest.fn().mockRejectedValue(new HttpError(401, 'Authorization bearer token is required')),
+      authenticateAdmin: jest
+        .fn()
+        .mockRejectedValue(
+          new HttpError(401, 'Authorization bearer token is required'),
+        ),
     });
 
     const response = await request(app).get('/api/admin/dashboard');
 
     expect(response.status).toBe(401);
-    expect(response.body).toEqual({ error: 'Authorization bearer token is required' });
+    expect(response.body).toEqual({
+      error: 'Authorization bearer token is required',
+    });
   });
 
   it('returns 403 for authenticated users without active employee access', async () => {
     const app = createTestApp({
-      authenticateAdmin: jest.fn().mockRejectedValue(new HttpError(403, 'Active employee access is required')),
+      authenticateAdmin: jest
+        .fn()
+        .mockRejectedValue(
+          new HttpError(403, 'Active employee access is required'),
+        ),
     });
 
-    const response = await request(app).get('/api/admin/dashboard').set('Authorization', 'Bearer user-token');
+    const response = await request(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', 'Bearer user-token');
 
     expect(response.status).toBe(403);
-    expect(response.body).toEqual({ error: 'Active employee access is required' });
+    expect(response.body).toEqual({
+      error: 'Active employee access is required',
+    });
   });
 
   it('allows active employees to load the dashboard', async () => {
     const app = createTestApp({
-      authenticateAdmin: jest.fn().mockResolvedValue({ appUser: { id: 1 }, employee: { id: 10 } }),
+      authenticateAdmin: jest
+        .fn()
+        .mockResolvedValue({ appUser: { id: 1 }, employee: { id: 10 } }),
     });
 
-    const response = await request(app).get('/api/admin/dashboard').set('Authorization', 'Bearer admin-token');
+    const response = await request(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', 'Bearer admin-token');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({

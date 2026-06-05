@@ -7,6 +7,10 @@ import { supabase } from "@/lib/supabase";
 
 type CallbackState = "loading" | "error";
 
+type AuthCallbackResult = {
+  type: string | null;
+};
+
 function getUrlParams(url: string): URLSearchParams {
   const params = new URLSearchParams();
   const [left, fragment] = url.split("#");
@@ -23,9 +27,10 @@ function getUrlParams(url: string): URLSearchParams {
   return params;
 }
 
-async function createSessionFromUrl(url: string): Promise<void> {
+async function createSessionFromUrl(url: string): Promise<AuthCallbackResult> {
   const params = getUrlParams(url);
   const errorDescription = params.get("error_description") ?? params.get("error");
+  const type = params.get("type");
 
   if (errorDescription) {
     throw new Error(errorDescription);
@@ -42,7 +47,7 @@ async function createSessionFromUrl(url: string): Promise<void> {
       throw error;
     }
 
-    return;
+    return { type };
   }
 
   if (accessToken && refreshToken) {
@@ -55,7 +60,7 @@ async function createSessionFromUrl(url: string): Promise<void> {
       throw error;
     }
 
-    return;
+    return { type };
   }
 
   throw new Error("Confirmation link is missing auth credentials.");
@@ -77,7 +82,13 @@ export default function AuthCallback() {
       handledUrlRef.current = url;
 
       try {
-        await createSessionFromUrl(url);
+        const result = await createSessionFromUrl(url);
+
+        if (result.type === "recovery") {
+          router.replace("/(auth)/reset-password");
+          return;
+        }
+
         setMessage("Loading your account");
         await apiRequest("/api/mobile/me");
         router.replace("/(tabs)/map");

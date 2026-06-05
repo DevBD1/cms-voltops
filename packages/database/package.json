@@ -1,32 +1,16 @@
 {
-  "name": "@voltops/db",
+  "name": "@voltops/database",
   "private": true,
   "version": "0.1.0",
-  "main": "./src/schema.ts",
-  "types": "./src/schema.ts",
   "scripts": {
-    "dev": "pnpm db:up",
-    "db:up": "docker compose up -d",
-    "db:down": "docker compose down",
-    "db:logs": "docker compose logs -f db",
-    "start": "pnpm db:up",
-    "build": "echo \"Database image is managed by Docker Compose\"",
-    "lint": "docker compose config -q",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx src/seed.ts"
-  },
-  "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "drizzle-orm": "latest",
-    "postgres": "latest"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "latest",
-    "dotenv": "latest",
-    "drizzle-kit": "latest",
-    "tsx": "^4.21.0",
-    "typescript": "latest"
+    "compose:up": "docker compose -f ../../docker-compose.yml up -d",
+    "compose:down": "docker compose -f ../../docker-compose.yml down",
+    "compose:logs": "docker compose -f ../../docker-compose.yml logs -f",
+    "dev": "pnpm api:up",
+    "api:up": "docker compose -f ../../docker-compose.yml up -d api",
+    "api:logs": "docker compose -f ../../docker-compose.yml logs -f api",
+    "start": "pnpm api:up",
+    "build": "echo \"Database and API images are managed by Docker Compose\"",
+    "lint": "docker compose -f ../../docker-compose.yml config -q"
   }
 }

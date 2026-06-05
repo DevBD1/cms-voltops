@@ -29,6 +29,39 @@ export function parseRequiredNumber(value: unknown, fieldName: string): number {
   return parsed;
 }
 
+export function parseRequiredString(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new HttpError(400, `${fieldName} is required`);
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new HttpError(400, `${fieldName} is required`);
+  }
+
+  return trimmed;
+}
+
+export function parseOptionalEnum<T extends string>(
+  value: unknown,
+  fieldName: string,
+  allowedValues: readonly T[],
+): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string' || !allowedValues.includes(value as T)) {
+    throw new HttpError(
+      400,
+      `${fieldName} must be one of: ${allowedValues.join(', ')}`,
+    );
+  }
+
+  return value as T;
+}
+
 export function sendError(res: Response, error: unknown): void {
   if (error instanceof HttpError) {
     logger.debug('api.route_error', {
@@ -40,7 +73,10 @@ export function sendError(res: Response, error: unknown): void {
     return;
   }
 
-  logger.error('api.unexpected_error', { requestId: res.locals.requestId, status: 500 });
+  logger.error('api.unexpected_error', {
+    requestId: res.locals.requestId,
+    status: 500,
+  });
   console.error(error);
   res.status(500).json({ error: 'Internal server error' });
 }

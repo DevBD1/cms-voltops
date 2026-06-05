@@ -12,8 +12,11 @@ const router = Router();
 function makeSupabaseClient() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required.');
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  if (!url || !key)
+    throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required.');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }
 
 /**
@@ -22,19 +25,26 @@ function makeSupabaseClient() {
  */
 function nameFromSupabaseUser(supabaseUser: SupabaseUser) {
   const meta = supabaseUser.user_metadata ?? {};
-  const firstName = typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
-  const lastName  = typeof meta.last_name  === 'string' ? meta.last_name.trim()  : '';
+  const firstName =
+    typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
+  const lastName =
+    typeof meta.last_name === 'string' ? meta.last_name.trim() : '';
 
-  if (firstName || lastName) return { firstName: firstName || 'User', lastName };
+  if (firstName || lastName)
+    return { firstName: firstName || 'User', lastName };
 
-  const fullName = typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+  const fullName =
+    typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
   if (fullName) {
     const [first, ...rest] = fullName.split(/\s+/);
     return { firstName: first || 'User', lastName: rest.join(' ') };
   }
 
   // Last resort: use the part of the email before @
-  return { firstName: supabaseUser.email?.split('@')[0] ?? 'User', lastName: '' };
+  return {
+    firstName: supabaseUser.email?.split('@')[0] ?? 'User',
+    lastName: '',
+  };
 }
 
 /**
@@ -78,7 +88,10 @@ async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
     })
     .returning();
 
-  logger.debug('auth.app_user_created', { userId: created.id, email: created.email });
+  logger.debug('auth.app_user_created', {
+    userId: created.id,
+    email: created.email,
+  });
   return created;
 }
 
@@ -120,7 +133,11 @@ router.post('/login', async (req, res) => {
     });
 
     if (error || !data.session) {
-      logger.info('auth.login_failed', { email, supabaseError: error?.message, supabaseCode: error?.code });
+      logger.info('auth.login_failed', {
+        email,
+        supabaseError: error?.message,
+        supabaseCode: error?.code,
+      });
       console.error('[auth] Supabase signInWithPassword failed:', error);
       res.status(401).json({ error: 'Geçersiz kimlik bilgileri.' });
       return;

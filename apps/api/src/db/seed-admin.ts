@@ -48,7 +48,9 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`✓ Found user  id=${user.id}  name=${user.firstName} ${user.lastName}`);
+  console.log(
+    `✓ Found user  id=${user.id}  name=${user.firstName} ${user.lastName}`,
+  );
 
   // Check if already an employee
   const [existing] = await db
@@ -59,7 +61,9 @@ async function main() {
 
   if (existing) {
     if (existing.status === 'active') {
-      console.log(`✓ Already an active employee  code=${existing.employeeCode}`);
+      console.log(
+        `✓ Already an active employee  code=${existing.employeeCode}`,
+      );
     } else {
       const [updated] = await db
         .update(employees)
@@ -85,7 +89,9 @@ async function main() {
     console.log(`✓ Employee record created  code=${created.employeeCode}`);
   }
 
-  console.log(`\n🔑 "${email}" can now access the admin dashboard at /dashboard\n`);
+  console.log(
+    `\n🔑 "${email}" can now access the admin dashboard at /dashboard\n`,
+  );
 }
 
 main()
