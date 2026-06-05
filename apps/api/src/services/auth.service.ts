@@ -215,6 +215,12 @@ export class AuthService {
     supabaseUser: User,
     requestId?: string,
   ): Promise<AppUser> {
+    const email = supabaseUser.email;
+
+    if (!email) {
+      throw new HttpError(401, 'Invalid Supabase auth token');
+    }
+
     const [existingByAuthId] = await db
       .select()
       .from(users)
@@ -233,7 +239,7 @@ export class AuthService {
     const [existingByEmail] = await db
       .select()
       .from(users)
-      .where(eq(users.email, supabaseUser.email!));
+      .where(eq(users.email, email));
 
     if (existingByEmail) {
       const backfilledIdentity = {
@@ -277,7 +283,7 @@ export class AuthService {
           authUserId: supabaseUser.id,
           firstName: name.firstName,
           lastName: name.lastName,
-          email: supabaseUser.email!,
+          email,
           phone: signupIdentity.phone,
           tckn: signupIdentity.tckn,
           passwordHash: null,

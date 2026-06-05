@@ -51,6 +51,21 @@ function limitedSelectResult(rows: unknown[]) {
   };
 }
 
+function ticketListResult(rows: unknown[]) {
+  const builder = {
+    from: jest.fn(),
+    leftJoin: jest.fn(),
+    where: jest.fn(),
+    orderBy: jest.fn().mockResolvedValue(rows),
+  };
+
+  builder.from.mockReturnValue(builder);
+  builder.leftJoin.mockReturnValue(builder);
+  builder.where.mockReturnValue(builder);
+
+  return builder;
+}
+
 describe('createAdminRouter', () => {
   beforeEach(() => {
     jest.resetAllMocks();
@@ -180,5 +195,68 @@ describe('createAdminRouter', () => {
       }),
     );
     expect(response.body.data.employeeCode).toBe('EMP-0001');
+  });
+
+  it('normalizes missing ticket status and priority values without crashing', async () => {
+    const authService = {
+      authenticateAdmin: jest
+        .fn()
+        .mockResolvedValue({ appUser: { id: 1 }, employee: { id: 10 } }),
+    };
+    jest.mocked(db.select).mockReturnValueOnce(
+      ticketListResult([
+        {
+          id: 12,
+          userId: 7,
+          userFirstName: 'Mert',
+          userLastName: 'Kaya',
+          stationCode: 'ST-1',
+          stationName: 'Moda Rapid Hub',
+          assignedEmployeeId: null,
+          title: 'Cable issue',
+          description: 'Cable latch felt loose.',
+          priority: null,
+          status: null,
+          createdAt: new Date('2026-06-05T10:00:00.000Z'),
+          updatedAt: new Date('2026-06-05T10:00:00.000Z'),
+        },
+        {
+          id: 13,
+          userId: 8,
+          userFirstName: 'Ece',
+          userLastName: 'Demir',
+          stationCode: 'ST-2',
+          stationName: 'Besiktas Marina Charge',
+          assignedEmployeeId: 3,
+          title: 'Unknown priority',
+          description: 'Unknown values should still be uppercased.',
+          priority: ' urgent ',
+          status: 'waiting',
+          createdAt: new Date('2026-06-05T11:00:00.000Z'),
+          updatedAt: new Date('2026-06-05T11:00:00.000Z'),
+        },
+      ]) as never,
+    );
+    const app = createTestApp(authService);
+
+    const response = await request(app)
+      .get('/api/admin/tickets')
+      .set('Authorization', 'Bearer admin-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data[0]).toEqual(
+      expect.objectContaining({
+        id: 12,
+        priority: 'MEDIUM',
+        status: 'OPEN',
+      }),
+    );
+    expect(response.body.data[1]).toEqual(
+      expect.objectContaining({
+        id: 13,
+        priority: 'URGENT',
+        status: 'WAITING',
+      }),
+    );
   });
 });

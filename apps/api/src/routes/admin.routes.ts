@@ -65,17 +65,30 @@ function normalizeSessionStatus(s: string): 'ACTIVE' | 'COMPLETED' | 'FAILED' {
   return map[s] ?? 'ACTIVE';
 }
 
-function normalizeTicketStatus(s: string): string {
+function normalizeTicketStatus(s: string | null | undefined): string {
+  const normalized = s?.trim();
+
+  if (!normalized) {
+    return 'OPEN';
+  }
+
   const map: Record<string, string> = {
     open: 'OPEN',
     in_progress: 'IN_PROGRESS',
     resolved: 'RESOLVED',
     closed: 'CLOSED',
   };
-  return map[s?.toLowerCase()] ?? s.toUpperCase();
+
+  return map[normalized.toLowerCase()] ?? normalized.toUpperCase();
 }
 
-function normalizeTicketPriority(s: string): string {
+function normalizeTicketPriority(s: string | null | undefined): string {
+  const normalized = s?.trim();
+
+  if (!normalized) {
+    return 'MEDIUM';
+  }
+
   const map: Record<string, string> = {
     low: 'LOW',
     normal: 'MEDIUM',
@@ -83,7 +96,8 @@ function normalizeTicketPriority(s: string): string {
     high: 'HIGH',
     critical: 'CRITICAL',
   };
-  return map[s?.toLowerCase()] ?? s.toUpperCase();
+
+  return map[normalized.toLowerCase()] ?? normalized.toUpperCase();
 }
 
 function toWebStation(s: StationSummary) {

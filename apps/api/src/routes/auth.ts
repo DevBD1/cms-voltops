@@ -3,7 +3,7 @@ import { createClient, type User as SupabaseUser } from '@supabase/supabase-js';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { employees, users } from '../db/schema';
-import { sendError } from '../utils/http';
+import { HttpError, sendError } from '../utils/http';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -52,6 +52,12 @@ function nameFromSupabaseUser(supabaseUser: SupabaseUser) {
  * Creates it automatically on first login — mirrors AuthService.findOrCreateUser.
  */
 async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
+  const email = supabaseUser.email;
+
+  if (!email) {
+    throw new HttpError(401, 'Geçersiz veya süresi dolmuş token.');
+  }
+
   const [byAuthId] = await db
     .select()
     .from(users)
@@ -62,7 +68,7 @@ async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
   const [byEmail] = await db
     .select()
     .from(users)
-    .where(eq(users.email, supabaseUser.email!))
+    .where(eq(users.email, email))
     .limit(1);
 
   if (byEmail) {
@@ -81,7 +87,7 @@ async function findOrCreateAppUser(supabaseUser: SupabaseUser) {
       authUserId: supabaseUser.id,
       firstName,
       lastName,
-      email: supabaseUser.email!,
+      email,
       phone: supabaseUser.phone ?? null,
       isActive: true,
       termsOfService: new Date(),
@@ -132,13 +138,15 @@ router.post('/login', async (req, res) => {
       password,
     });
 
-    if (error || !data.session) {
+    if (error || !data.session || !data.user?.email) {
       logger.info('auth.login_failed', {
         email,
         supabaseError: error?.message,
         supabaseCode: error?.code,
       });
-      console.error('[auth] Supabase signInWithPassword failed:', error);
+      if (error) {
+        console.error('[auth] Supabase signInWithPassword failed:', error);
+      }
       res.status(401).json({ error: 'Geçersiz kimlik bilgileri.' });
       return;
     }
