@@ -1,3 +1,6 @@
+# VoltOps Database Schema
+
+Canonical source: `apps/api/src/db/schema.ts` and generated migrations in `apps/api/drizzle/`.
 
 ```mermaid
 erDiagram
@@ -7,23 +10,24 @@ erDiagram
     %% =========================
 
     USERS {
-        bigint id PK
+        integer id PK
+        uuid auth_user_id UK "nullable"
         varchar first_name
         varchar last_name
-        integer tckn "nullable"
+        varchar tckn "nullable, varchar(11)"
         varchar email UK
-        varchar phone UK
-        varchar password_hash
+        varchar phone UK "nullable"
+        varchar password_hash "nullable"
         boolean is_active
-        timestamp created_at
-        timestamp updated_at
         timestamp marketing_consent "nullable"
         timestamp terms_of_service "nullable"
+        timestamp created_at
+        timestamp updated_at
     }
 
     EMPLOYEES {
-        bigint id PK
-        bigint user_id FK
+        integer id PK
+        integer user_id FK
         varchar employee_code UK
         varchar department
         varchar job_title
@@ -33,28 +37,20 @@ erDiagram
         timestamp updated_at
     }
 
-    STATION_EMPLOYEES {
-        bigint id PK
-        bigint station_id FK
-        bigint employee_id FK
-        varchar assignment_role
-        timestamp assigned_at
-    }
-
     ADDRESSES {
-        bigint id PK
-        bigint user_id FK
+        integer id PK
+        integer user_id FK
         varchar title
         varchar country
         varchar city
         varchar district
-        varchar neighborhood
-        varchar avenue
-        varchar street
-        varchar apt_no
-        varchar apt
-        varchar door_no
-        varchar postal_no
+        varchar neighborhood "nullable"
+        varchar avenue "nullable"
+        varchar street "nullable"
+        varchar apt_no "nullable"
+        varchar apt "nullable"
+        varchar door_no "nullable"
+        varchar postal_no "nullable"
     }
 
     %% =========================
@@ -67,10 +63,10 @@ erDiagram
     }
 
     USER_VEHICLES {
-        bigint id PK
-        bigint user_id FK
-        bigint vehicle_plate_number FK
-        varchar relationship_type "owner, driver, family_member"
+        integer id PK
+        integer user_id FK
+        varchar vehicle_plate_number FK
+        varchar relationship_type
         boolean is_primary
     }
 
@@ -83,8 +79,8 @@ erDiagram
         varchar name
         varchar city
         varchar district
-        decimal latitude
-        decimal longitude
+        numeric latitude
+        numeric longitude
         varchar status
         timestamp created_at
         timestamp updated_at
@@ -92,25 +88,33 @@ erDiagram
 
     PLUGS {
         varchar plug_code PK
-        bigint station_id FK
+        varchar station_code FK
         varchar plug_type
-        decimal power_kw
+        numeric power_kw
         varchar current_type
         varchar status
         timestamp created_at
         timestamp updated_at
     }
 
+    STATION_EMPLOYEES {
+        integer id PK
+        varchar station_code FK
+        integer employee_id FK
+        varchar assignment_role
+        timestamp assigned_at
+    }
+
     SESSIONS {
-        bigint id PK
-        bigint user_id FK
-        bigint plug_id FK
-        bigint vehicle_plate_number FK
+        integer id PK
+        integer user_id FK
+        varchar plug_code FK
+        varchar vehicle_plate_number FK "nullable"
         timestamp started_at
-        timestamp ended_at
-        decimal energy_kwh
-        decimal duration_minutes
-        decimal total_price
+        timestamp ended_at "nullable"
+        numeric energy_kwh "nullable"
+        numeric duration_minutes "nullable"
+        numeric total_price "nullable"
         varchar status
         timestamp created_at
         timestamp updated_at
@@ -118,10 +122,10 @@ erDiagram
 
     RECEIPTS {
         varchar receipt_no PK
-        bigint session_id FK
-        decimal subtotal
-        decimal tax_amount
-        decimal total_amount
+        integer session_id FK
+        numeric subtotal
+        numeric tax_amount
+        numeric total_amount
         varchar currency
         timestamp issued_at
         timestamp created_at
@@ -133,25 +137,25 @@ erDiagram
     %% =========================
 
     MAINTENANCE {
-        bigint id PK
-        bigint station_id FK
-        bigint plug_id FK
-        bigint employee_id FK
+        integer id PK
+        varchar station_code FK
+        varchar plug_code FK "nullable"
+        integer employee_id FK "nullable"
         varchar maintenance_type
         text description
         date scheduled_date
-        date completed_date
+        date completed_date "nullable"
         varchar status
         timestamp created_at
         timestamp updated_at
     }
 
     TICKETS {
-        bigint id PK
-        bigint user_id FK
-        bigint station_id FK "nullable"
-        bigint session_id FK "nullable"
-        bigint assigned_employee_id FK
+        integer id PK
+        integer user_id FK
+        varchar station_code FK "nullable"
+        integer session_id FK "nullable"
+        integer assigned_employee_id FK "nullable"
         varchar title
         text description
         varchar priority
@@ -165,13 +169,18 @@ erDiagram
     %% =========================
 
     USERS ||--o| EMPLOYEES : has_employee_profile
+    USERS ||--o{ ADDRESSES : has
+    USERS ||--o{ USER_VEHICLES : owns_or_uses
     USERS ||--o{ SESSIONS : starts
     USERS ||--o{ TICKETS : creates
 
+    VEHICLES ||--o{ USER_VEHICLES : assigned_to_users
+    VEHICLES ||--o{ SESSIONS : used_for
+
     STATIONS ||--o{ PLUGS : contains
+    STATIONS ||--o{ STATION_EMPLOYEES : includes
     STATIONS ||--o{ MAINTENANCE : has
     STATIONS ||--o{ TICKETS : related_to
-    STATIONS ||--o{ STATION_EMPLOYEES : includes
 
     PLUGS ||--o{ SESSIONS : used_in
     PLUGS ||--o{ MAINTENANCE : needs
@@ -179,7 +188,20 @@ erDiagram
     SESSIONS ||--o| RECEIPTS : generates
     SESSIONS ||--o{ TICKETS : may_cause
 
+    EMPLOYEES ||--o{ STATION_EMPLOYEES : works_at
     EMPLOYEES ||--o{ MAINTENANCE : performs
     EMPLOYEES ||--o{ TICKETS : assigned_to
-    EMPLOYEES ||--o{ STATION_EMPLOYEES : works_at
 ```
+
+## Canonical Constraints
+
+- Unique indexes: `users_auth_user_id_unique`, `users_email_unique`, `users_phone_unique`, `employees_employee_code_unique`.
+- Composite unique index: `user_vehicles_user_vehicle_unique` on `(user_id, vehicle_plate_number)`.
+- Partial unique index: `sessions_active_user_unique` on `user_id` where `status = 'active'`.
+- Foreign keys use natural station and plug keys: `station_code`, `plug_code`, and `vehicle_plate_number`.
+- `phone`, `password_hash`, `auth_user_id`, `tckn`, `vehicle_plate_number`, `ended_at`, session totals, optional maintenance/ticket assignments, and optional address detail fields are nullable.
+
+## Security Notes
+
+- Row Level Security is enabled on all app tables by migration `0002_pink_iceman.sql`.
+- Direct public reads from `stations` and `plugs` are revoked for `anon` and `authenticated`; clients should use the Express API for business data.
