@@ -3,11 +3,26 @@ import { AuthService } from '../services/auth.service';
 import { CatalogService } from '../services/catalog.service';
 import { SessionService, SessionStatus } from '../services/session.service';
 import { TicketService } from '../services/ticket.service';
-import { allowedConnectorTypes, ConnectorType, VehicleService } from '../services/vehicle.service';
-import { HttpError, parseOptionalEnum, parsePositiveNumber, parseRequiredNumber, parseRequiredString, sendError } from '../utils/http';
+import {
+  allowedConnectorTypes,
+  ConnectorType,
+  VehicleService,
+} from '../services/vehicle.service';
+import {
+  HttpError,
+  parseOptionalEnum,
+  parsePositiveNumber,
+  parseRequiredNumber,
+  parseRequiredString,
+  sendError,
+} from '../utils/http';
 import { logger } from '../utils/logger';
 
-const allowedSessionStatuses: SessionStatus[] = ['active', 'completed', 'cancelled'];
+const allowedSessionStatuses: SessionStatus[] = [
+  'active',
+  'completed',
+  'cancelled',
+];
 
 export function createMobileRouter(
   authService: AuthService,
@@ -20,7 +35,10 @@ export function createMobileRouter(
 
   router.get('/me', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
       const profile = await authService.getProfile(auth.appUser.id);
 
       logger.debug('mobile.profile_loaded', {
@@ -37,10 +55,20 @@ export function createMobileRouter(
 
   router.get('/stations', async (req, res) => {
     try {
-      const latitude = req.query.lat === undefined ? undefined : parseRequiredNumber(req.query.lat, 'lat');
-      const longitude = req.query.lng === undefined ? undefined : parseRequiredNumber(req.query.lng, 'lng');
+      const latitude =
+        req.query.lat === undefined
+          ? undefined
+          : parseRequiredNumber(req.query.lat, 'lat');
+      const longitude =
+        req.query.lng === undefined
+          ? undefined
+          : parseRequiredNumber(req.query.lng, 'lng');
       const radiusKm = parsePositiveNumber(req.query.radiusKm, 25);
-      const stationRows = await catalogService.listStations({ latitude, longitude, radiusKm });
+      const stationRows = await catalogService.listStations({
+        latitude,
+        longitude,
+        radiusKm,
+      });
 
       logger.debug('mobile.stations_listed', {
         requestId: res.locals.requestId,
@@ -73,9 +101,19 @@ export function createMobileRouter(
 
   router.get('/sessions', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
-      const status = parseOptionalEnum(req.query.status, 'status', allowedSessionStatuses);
-      const sessionRows = await sessionService.listSessions({ userId: auth.appUser.id, status });
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
+      const status = parseOptionalEnum(
+        req.query.status,
+        'status',
+        allowedSessionStatuses,
+      );
+      const sessionRows = await sessionService.listSessions({
+        userId: auth.appUser.id,
+        status,
+      });
 
       logger.debug('mobile.sessions_listed', {
         requestId: res.locals.requestId,
@@ -92,10 +130,20 @@ export function createMobileRouter(
 
   router.post('/sessions', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
       const plugCode = parseRequiredString(req.body.plugCode, 'plugCode');
-      const vehiclePlateNumber = parseRequiredString(req.body.vehiclePlateNumber, 'vehiclePlateNumber');
-      const session = await sessionService.startSession(auth.appUser.id, plugCode, vehiclePlateNumber);
+      const vehiclePlateNumber = parseRequiredString(
+        req.body.vehiclePlateNumber,
+        'vehiclePlateNumber',
+      );
+      const session = await sessionService.startSession(
+        auth.appUser.id,
+        plugCode,
+        vehiclePlateNumber,
+      );
 
       logger.debug('mobile.session_started', {
         requestId: res.locals.requestId,
@@ -112,10 +160,17 @@ export function createMobileRouter(
 
   router.post('/sessions/:sessionId/end', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
       const sessionId = parseRequiredNumber(req.params.sessionId, 'sessionId');
       const energyKwh = parseRequiredNumber(req.body.energyKwh, 'energyKwh');
-      const session = await sessionService.endSession(sessionId, energyKwh, auth.appUser.id);
+      const session = await sessionService.endSession(
+        sessionId,
+        energyKwh,
+        auth.appUser.id,
+      );
 
       logger.debug('mobile.session_ended', {
         requestId: res.locals.requestId,
@@ -132,15 +187,30 @@ export function createMobileRouter(
 
   router.post('/vehicles', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
-      const plateNumber = parseRequiredString(req.body.plateNumber, 'plateNumber');
-      const connectorType = parseRequiredString(req.body.connectorType, 'connectorType') as ConnectorType;
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
+      const plateNumber = parseRequiredString(
+        req.body.plateNumber,
+        'plateNumber',
+      );
+      const connectorType = parseRequiredString(
+        req.body.connectorType,
+        'connectorType',
+      ) as ConnectorType;
 
       if (!allowedConnectorTypes.includes(connectorType)) {
-        throw new HttpError(400, `connectorType must be one of: ${allowedConnectorTypes.join(', ')}`);
+        throw new HttpError(
+          400,
+          `connectorType must be one of: ${allowedConnectorTypes.join(', ')}`,
+        );
       }
 
-      const profile = await vehicleService.addVehicle(auth.appUser.id, { plateNumber, connectorType });
+      const profile = await vehicleService.addVehicle(auth.appUser.id, {
+        plateNumber,
+        connectorType,
+      });
 
       logger.debug('mobile.vehicle_added', {
         requestId: res.locals.requestId,
@@ -156,8 +226,14 @@ export function createMobileRouter(
 
   router.delete('/vehicles/:plateNumber', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
-      const profile = await vehicleService.removeVehicle(auth.appUser.id, req.params.plateNumber);
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
+      const profile = await vehicleService.removeVehicle(
+        auth.appUser.id,
+        req.params.plateNumber,
+      );
 
       logger.debug('mobile.vehicle_removed', {
         requestId: res.locals.requestId,
@@ -173,8 +249,13 @@ export function createMobileRouter(
 
   router.get('/tickets', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
-      const ticketRows = await ticketService.listTickets({ userId: auth.appUser.id });
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
+      const ticketRows = await ticketService.listTickets({
+        userId: auth.appUser.id,
+      });
 
       logger.debug('mobile.tickets_listed', {
         requestId: res.locals.requestId,
@@ -190,11 +271,20 @@ export function createMobileRouter(
 
   router.post('/tickets', async (req, res) => {
     try {
-      const auth = await authService.authenticate(req.header('authorization'), res.locals.requestId);
+      const auth = await authService.authenticate(
+        req.header('authorization'),
+        res.locals.requestId,
+      );
       const ticket = await ticketService.createTicket({
         userId: auth.appUser.id,
-        stationCode: req.body.stationCode === undefined ? undefined : String(req.body.stationCode),
-        sessionId: req.body.sessionId === undefined ? undefined : parseRequiredNumber(req.body.sessionId, 'sessionId'),
+        stationCode:
+          req.body.stationCode === undefined
+            ? undefined
+            : String(req.body.stationCode),
+        sessionId:
+          req.body.sessionId === undefined
+            ? undefined
+            : parseRequiredNumber(req.body.sessionId, 'sessionId'),
         title: String(req.body.title ?? ''),
         description: String(req.body.description ?? ''),
         priority: req.body.priority,

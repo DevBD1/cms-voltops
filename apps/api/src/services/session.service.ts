@@ -1,6 +1,17 @@
-import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { plugs, receipts, sessions, stations, users, userVehicles } from '../db/schema';
+import {
+  cities,
+  connectorTypes,
+  districts,
+  plugs,
+  pricingRules,
+  receipts,
+  sessions,
+  stations,
+  taxRates,
+  users,
+} from '../db/schema';
 import { HttpError } from '../utils/http';
 import { CatalogService } from './catalog.service';
 
@@ -11,6 +22,9 @@ const demoStartingBatteryPercent = 20;
 const demoMaxBatteryPercent = 95;
 
 type Session = typeof sessions.$inferSelect;
+type Receipt = typeof receipts.$inferSelect;
+type PricingRule = typeof pricingRules.$inferSelect;
+type TaxRate = typeof taxRates.$inferSelect;
 export type SessionStatus = 'active' | 'completed' | 'cancelled';
 
 type SessionContextFilters = {
@@ -24,151 +38,116 @@ function isUniqueViolation(error: unknown, constraintName: string): boolean {
     return false;
   }
 
-  const candidate = error as { code?: unknown; constraint?: unknown; constraint_name?: unknown; message?: unknown };
+  const candidate = error as {
+    code?: unknown;
+    constraint?: unknown;
+    constraint_name?: unknown;
+    message?: unknown;
+  };
 
   return (
     candidate.code === '23505' &&
     (candidate.constraint === constraintName ||
       candidate.constraint_name === constraintName ||
-      (typeof candidate.message === 'string' && candidate.message.includes(constraintName)))
+      (typeof candidate.message === 'string' &&
+        candidate.message.includes(constraintName)))
   );
+}
+
+function procedureMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  const candidate = error as {
+    message?: unknown;
+    cause?: { message?: unknown };
+  };
+
+  if (typeof candidate.cause?.message === 'string') {
+    return candidate.cause.message;
+  }
+
+  return typeof candidate.message === 'string' ? candidate.message : null;
+}
+
+function mapProcedureError(error: unknown): never {
+  const message = procedureMessage(error);
+
+  switch (message) {
+    case 'Active user not found':
+    case 'Vehicle not found':
+    case 'Plug not found':
+    case 'Session not found':
+      throw new HttpError(404, message);
+    case 'Active session already exists':
+    case 'Plug is not available':
+    case 'Session is not active':
+      throw new HttpError(409, message);
+    case 'energyKwh must be greater than zero':
+      throw new HttpError(400, message);
+    case 'Active pricing rule not found':
+    case 'Active tax rate not found':
+      throw new HttpError(500, message);
+    default:
+      throw error;
+  }
 }
 
 export class SessionService {
   constructor(private readonly catalogService: CatalogService) {}
 
-  async listSessions(filters?: { userId?: number; status?: SessionStatus | string }) {
+  async listSessions(filters?: {
+    userId?: number;
+    status?: SessionStatus | string;
+  }) {
     return this.loadSessionContexts(filters);
   }
 
-  async startSession(userId: number, plugCode: string, vehiclePlateNumber?: string | null) {
-    const now = new Date();
-
+  async startSession(
+    userId: number,
+    plugCode: string,
+    vehiclePlateNumber?: string | null,
+  ) {
     try {
-      const session = await db.transaction(async (tx) => {
-        const [user] = await tx.select().from(users).where(eq(users.id, userId));
+      const result = await db.execute<{ session_id: number }>(
+        sql`call public.proc_start_session(${userId}, ${plugCode}, ${
+          vehiclePlateNumber ?? null
+        }, null)`,
+      );
+      const [session] = result;
 
-        if (!user || !user.isActive) {
-          throw new HttpError(404, 'Active user not found');
-        }
+      if (!session) {
+        throw new HttpError(500, 'Session could not be started');
+      }
 
-        const [activeSession] = await tx
-          .select({ id: sessions.id })
-          .from(sessions)
-          .where(and(eq(sessions.userId, userId), eq(sessions.status, 'active')));
-
-        if (activeSession) {
-          throw new HttpError(409, 'Active session already exists');
-        }
-
-        if (vehiclePlateNumber) {
-          const [vehicle] = await tx
-            .select({ id: userVehicles.id })
-            .from(userVehicles)
-            .where(and(eq(userVehicles.userId, userId), eq(userVehicles.vehiclePlateNumber, vehiclePlateNumber)));
-          if (!vehicle) {
-            throw new HttpError(404, 'Vehicle not found');
-          }
-        }
-
-        const [claimedPlug] = await tx
-          .update(plugs)
-          .set({ status: 'in_use', updatedAt: now })
-          .where(and(eq(plugs.plugCode, plugCode), eq(plugs.status, 'available')))
-          .returning();
-
-        if (!claimedPlug) {
-          const [plug] = await tx.select().from(plugs).where(eq(plugs.plugCode, plugCode));
-
-          if (!plug) {
-            throw new HttpError(404, 'Plug not found');
-          }
-
-          throw new HttpError(409, 'Plug is not available');
-        }
-
-        const [createdSession] = await tx
-          .insert(sessions)
-          .values({
-            userId,
-            plugCode,
-            vehiclePlateNumber: vehiclePlateNumber ?? null,
-            startedAt: now,
-            status: 'active',
-          })
-          .returning();
-
-        return createdSession;
-      });
-
-      return this.loadSessionContext(session.id);
+      return this.loadSessionContext(session.session_id);
     } catch (error) {
       if (isUniqueViolation(error, 'sessions_active_user_unique')) {
         throw new HttpError(409, 'Active session already exists');
       }
 
-      throw error;
+      return mapProcedureError(error);
     }
   }
 
   async endSession(sessionId: number, energyKwh: number, userId?: number) {
-    const now = new Date();
+    try {
+      const result = await db.execute<{ completed_session_id: number }>(
+        sql`call public.proc_end_session(${sessionId}, ${energyKwh}, ${
+          userId ?? null
+        }, null)`,
+      );
+      const [session] = result;
 
-    const session = await db.transaction(async (tx) => {
-      const [sessionRow] = await tx.select().from(sessions).where(eq(sessions.id, sessionId));
-
-      if (!sessionRow) {
-        throw new HttpError(404, 'Session not found');
+      if (!session) {
+        throw new HttpError(500, 'Session could not be ended');
       }
 
-      if (userId !== undefined && sessionRow.userId !== userId) {
-        throw new HttpError(404, 'Session not found');
-      }
-
-      if (sessionRow.status !== 'active') {
-        throw new HttpError(409, 'Session is not active');
-      }
-
-      if (energyKwh <= 0) {
-        throw new HttpError(400, 'energyKwh must be greater than zero');
-      }
-
-      const subtotal = Math.round(energyKwh * fallbackPricePerKwh * 100) / 100;
-      const taxAmount = Math.round(subtotal * receiptTaxRate * 100) / 100;
-      const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
-      const durationMinutes = Math.max(1, Math.round((now.getTime() - sessionRow.startedAt.getTime()) / 60000));
-
-      const [updatedSession] = await tx
-        .update(sessions)
-        .set({
-          endedAt: now,
-          energyKwh: String(energyKwh),
-          durationMinutes: String(durationMinutes),
-          totalPrice: String(totalAmount),
-          status: 'completed',
-          updatedAt: now,
-        })
-        .where(eq(sessions.id, sessionId))
-        .returning();
-
-      await tx.update(plugs).set({ status: 'available', updatedAt: now }).where(eq(plugs.plugCode, sessionRow.plugCode));
-      await tx
-        .insert(receipts)
-        .values({
-          receiptNo: `R-${String(sessionId).padStart(6, '0')}`,
-          sessionId,
-          subtotal: String(subtotal),
-          taxAmount: String(taxAmount),
-          totalAmount: String(totalAmount),
-          currency: 'TRY',
-          issuedAt: now,
-        })
-        .onConflictDoNothing();
-
-      return updatedSession;
-    });
-
-    return this.loadSessionContext(session.id);
+      return this.loadSessionContext(session.completed_session_id);
+    } catch (error) {
+      return mapProcedureError(error);
+    }
   }
 
   private async loadSessionContext(sessionId: number) {
@@ -201,16 +180,36 @@ export class SessionService {
         session: sessions,
         user: users,
         plug: plugs,
+        connectorType: connectorTypes,
         station: stations,
+        district: districts,
+        city: cities,
         receipt: receipts,
+        pricingRule: pricingRules,
+        taxRate: taxRates,
       })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
       .innerJoin(plugs, eq(sessions.plugCode, plugs.plugCode))
+      .innerJoin(
+        connectorTypes,
+        eq(plugs.connectorTypeCode, connectorTypes.code),
+      )
       .innerJoin(stations, eq(plugs.stationCode, stations.stationCode))
+      .innerJoin(districts, eq(stations.districtId, districts.id))
+      .innerJoin(cities, eq(districts.cityId, cities.id))
       .leftJoin(receipts, eq(receipts.sessionId, sessions.id));
-    const filteredQuery = conditions.length > 0 ? query.where(and(...conditions)) : query;
-    const rows = await filteredQuery.orderBy(desc(sessions.startedAt), desc(sessions.id));
+    const withPricing = query
+      .leftJoin(pricingRules, eq(receipts.pricingRuleId, pricingRules.id))
+      .leftJoin(taxRates, eq(receipts.taxRateId, taxRates.id));
+    const filteredQuery =
+      conditions.length > 0
+        ? withPricing.where(and(...conditions))
+        : withPricing;
+    const rows = await filteredQuery.orderBy(
+      desc(sessions.startedAt),
+      desc(sessions.id),
+    );
 
     return rows.map((row) => this.toSessionContext(row));
   }
@@ -219,8 +218,13 @@ export class SessionService {
     session: Session;
     user: typeof users.$inferSelect;
     plug: typeof plugs.$inferSelect;
+    connectorType: typeof connectorTypes.$inferSelect;
     station: typeof stations.$inferSelect;
-    receipt: typeof receipts.$inferSelect | null;
+    district: typeof districts.$inferSelect;
+    city: typeof cities.$inferSelect;
+    receipt: Receipt | null;
+    pricingRule: PricingRule | null;
+    taxRate: TaxRate | null;
   }) {
     const publicUser = row.user
       ? {
@@ -234,26 +238,70 @@ export class SessionService {
           updatedAt: row.user.updatedAt,
         }
       : undefined;
-    const plug = { ...row.plug, station: row.station };
+    const plug = {
+      ...row.plug,
+      plugType: row.connectorType.code,
+      currentType: row.connectorType.currentType,
+      connectorType: row.connectorType,
+      station: {
+        ...row.station,
+        city: row.city.name,
+        district: row.district.name,
+        countryCode: row.city.countryCode,
+      },
+    };
+    const durationMinutes = computeDurationMinutes(
+      row.session.startedAt,
+      row.session.endedAt,
+    );
+    const receipt =
+      row.receipt && row.pricingRule && row.taxRate
+        ? toComputedReceipt(
+            row.receipt,
+            row.session.energyKwh,
+            row.pricingRule,
+            row.taxRate,
+          )
+        : null;
 
     return {
       ...row.session,
+      durationMinutes:
+        durationMinutes === null ? null : String(durationMinutes),
+      totalPrice: receipt?.totalAmount ?? null,
       user: publicUser,
       plug,
-      receipt: row.receipt ?? null,
-      live: row.session.status === 'active' ? this.toLiveProjection(row.session, Number(row.plug.powerKw)) : undefined,
+      receipt,
+      live:
+        row.session.status === 'active'
+          ? this.toLiveProjection(row.session, Number(row.plug.powerKw))
+          : undefined,
     };
   }
 
   private toLiveProjection(session: Session, chargeSpeedKw: number) {
-    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - session.startedAt.getTime()) / 1000));
+    const elapsedSeconds = Math.max(
+      0,
+      Math.floor((Date.now() - session.startedAt.getTime()) / 1000),
+    );
     const unconstrainedEnergyKwh = (chargeSpeedKw * elapsedSeconds) / 3600;
-    const maxDemoEnergyKwh = ((demoMaxBatteryPercent - demoStartingBatteryPercent) / 100) * demoBatteryCapacityKwh;
-    const estimatedEnergyKwh = Math.round(Math.min(unconstrainedEnergyKwh, maxDemoEnergyKwh) * 100) / 100;
-    const estimatedPrice = Math.round(estimatedEnergyKwh * fallbackPricePerKwh * (1 + receiptTaxRate) * 100) / 100;
+    const maxDemoEnergyKwh =
+      ((demoMaxBatteryPercent - demoStartingBatteryPercent) / 100) *
+      demoBatteryCapacityKwh;
+    const estimatedEnergyKwh =
+      Math.round(Math.min(unconstrainedEnergyKwh, maxDemoEnergyKwh) * 100) /
+      100;
+    const estimatedPrice =
+      Math.round(
+        estimatedEnergyKwh * fallbackPricePerKwh * (1 + receiptTaxRate) * 100,
+      ) / 100;
     const batteryPercent = Math.min(
       demoMaxBatteryPercent,
-      Math.round((demoStartingBatteryPercent + (estimatedEnergyKwh / demoBatteryCapacityKwh) * 100) * 10) / 10,
+      Math.round(
+        (demoStartingBatteryPercent +
+          (estimatedEnergyKwh / demoBatteryCapacityKwh) * 100) *
+          10,
+      ) / 10,
     );
 
     return {
@@ -265,4 +313,50 @@ export class SessionService {
       currency: 'TRY',
     };
   }
+}
+
+function computeDurationMinutes(startedAt: Date, endedAt: Date | null) {
+  if (!endedAt) {
+    return null;
+  }
+
+  return Math.max(
+    1,
+    Math.round((endedAt.getTime() - startedAt.getTime()) / 60000),
+  );
+}
+
+function computeTotals(
+  energyKwh: number,
+  pricePerKwh: number,
+  taxRate: number,
+) {
+  const subtotal = Math.round(energyKwh * pricePerKwh * 100) / 100;
+  const taxAmount = Math.round(subtotal * taxRate * 100) / 100;
+  const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
+
+  return {
+    subtotal: subtotal.toFixed(2),
+    taxAmount: taxAmount.toFixed(2),
+    totalAmount: totalAmount.toFixed(2),
+  };
+}
+
+function toComputedReceipt(
+  receipt: Receipt,
+  energyKwh: string | null,
+  pricingRule: PricingRule,
+  taxRate: TaxRate,
+) {
+  const totals = computeTotals(
+    Number(energyKwh ?? 0),
+    Number(pricingRule.pricePerKwh),
+    Number(taxRate.rate),
+  );
+
+  return {
+    ...receipt,
+    ...totals,
+    currency: pricingRule.currency,
+  };
 }

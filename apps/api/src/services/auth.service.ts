@@ -1,7 +1,13 @@
 import { createClient, User } from '@supabase/supabase-js';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { employees, userVehicles, users, vehicles } from '../db/schema';
+import {
+  connectorTypes,
+  employees,
+  userVehicles,
+  users,
+  vehicles,
+} from '../db/schema';
 import '../env';
 import { HttpError } from '../utils/http';
 import { logger } from '../utils/logger';
@@ -29,11 +35,16 @@ function parseBearerToken(authorization?: string): string {
   return token;
 }
 
-function userNameFromAuthUser(user: User): Pick<AppUser, 'firstName' | 'lastName'> {
+function userNameFromAuthUser(
+  user: User,
+): Pick<AppUser, 'firstName' | 'lastName'> {
   const metadata = user.user_metadata ?? {};
-  const fullName = typeof metadata.full_name === 'string' ? metadata.full_name.trim() : '';
-  const firstName = typeof metadata.first_name === 'string' ? metadata.first_name.trim() : '';
-  const lastName = typeof metadata.last_name === 'string' ? metadata.last_name.trim() : '';
+  const fullName =
+    typeof metadata.full_name === 'string' ? metadata.full_name.trim() : '';
+  const firstName =
+    typeof metadata.first_name === 'string' ? metadata.first_name.trim() : '';
+  const lastName =
+    typeof metadata.last_name === 'string' ? metadata.last_name.trim() : '';
 
   if (firstName || lastName) {
     return { firstName: firstName || 'User', lastName };
@@ -58,7 +69,8 @@ function optionalTrimmedString(value: unknown): string | null {
 
 function signupIdentityFromAuthUser(user: User): SignupIdentityMetadata {
   const metadata = user.user_metadata ?? {};
-  const phone = optionalTrimmedString(metadata.phone) ?? optionalTrimmedString(user.phone);
+  const phone =
+    optionalTrimmedString(metadata.phone) ?? optionalTrimmedString(user.phone);
   const tckn = optionalTrimmedString(metadata.tckn);
 
   if (phone && phone.length > 30) {
@@ -77,13 +89,19 @@ function isUniqueViolation(error: unknown, constraintName: string): boolean {
     return false;
   }
 
-  const candidate = error as { code?: unknown; constraint?: unknown; constraint_name?: unknown; message?: unknown };
+  const candidate = error as {
+    code?: unknown;
+    constraint?: unknown;
+    constraint_name?: unknown;
+    message?: unknown;
+  };
 
   return (
     candidate.code === '23505' &&
     (candidate.constraint === constraintName ||
       candidate.constraint_name === constraintName ||
-      (typeof candidate.message === 'string' && candidate.message.includes(constraintName)))
+      (typeof candidate.message === 'string' &&
+        candidate.message.includes(constraintName)))
   );
 }
 
@@ -95,7 +113,9 @@ export class AuthService {
     const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 
     if (!supabaseUrl || !supabasePublishableKey) {
-      throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required for API auth.');
+      throw new Error(
+        'SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required for API auth.',
+      );
     }
 
     this.supabaseAuth = createClient(supabaseUrl, supabasePublishableKey, {
@@ -106,7 +126,10 @@ export class AuthService {
     });
   }
 
-  async authenticate(authorization?: string, requestId?: string): Promise<AuthContext> {
+  async authenticate(
+    authorization?: string,
+    requestId?: string,
+  ): Promise<AuthContext> {
     const token = parseBearerToken(authorization);
     const { data, error } = await this.supabaseAuth.auth.getUser(token);
 
@@ -114,7 +137,10 @@ export class AuthService {
       throw new HttpError(401, 'Invalid Supabase auth token');
     }
 
-    logger.debug('auth.supabase_user_verified', { requestId, authUserId: data.user.id });
+    logger.debug('auth.supabase_user_verified', {
+      requestId,
+      authUserId: data.user.id,
+    });
 
     return {
       token,
@@ -123,12 +149,20 @@ export class AuthService {
     };
   }
 
-  async authenticateAdmin(authorization?: string, requestId?: string): Promise<AdminAuthContext> {
+  async authenticateAdmin(
+    authorization?: string,
+    requestId?: string,
+  ): Promise<AdminAuthContext> {
     const auth = await this.authenticate(authorization, requestId);
     const [employee] = await db
       .select()
       .from(employees)
-      .where(and(eq(employees.userId, auth.appUser.id), eq(employees.status, 'active')));
+      .where(
+        and(
+          eq(employees.userId, auth.appUser.id),
+          eq(employees.status, 'active'),
+        ),
+      );
 
     if (!employee) {
       throw new HttpError(403, 'Active employee access is required');
@@ -157,10 +191,18 @@ export class AuthService {
         relationshipType: userVehicles.relationshipType,
         isPrimary: userVehicles.isPrimary,
         plateNumber: vehicles.plateNumber,
-        connectorType: vehicles.connectorType,
+        connectorType: connectorTypes.vehicleLabel,
+        connectorTypeCode: vehicles.connectorTypeCode,
       })
       .from(userVehicles)
-      .innerJoin(vehicles, eq(userVehicles.vehiclePlateNumber, vehicles.plateNumber))
+      .innerJoin(
+        vehicles,
+        eq(userVehicles.vehiclePlateNumber, vehicles.plateNumber),
+      )
+      .innerJoin(
+        connectorTypes,
+        eq(vehicles.connectorTypeCode, connectorTypes.code),
+      )
       .where(eq(userVehicles.userId, userId));
 
     return {
@@ -169,16 +211,35 @@ export class AuthService {
     };
   }
 
-  private async findOrCreateUser(supabaseUser: User, requestId?: string): Promise<AppUser> {
-    const [existingByAuthId] = await db.select().from(users).where(eq(users.authUserId, supabaseUser.id));
+  private async findOrCreateUser(
+    supabaseUser: User,
+    requestId?: string,
+  ): Promise<AppUser> {
+    const email = supabaseUser.email;
+
+    if (!email) {
+      throw new HttpError(401, 'Invalid Supabase auth token');
+    }
+
+    const [existingByAuthId] = await db
+      .select()
+      .from(users)
+      .where(eq(users.authUserId, supabaseUser.id));
 
     if (existingByAuthId) {
-      logger.debug('auth.app_user_found', { requestId, userId: existingByAuthId.id, authUserId: supabaseUser.id });
+      logger.debug('auth.app_user_found', {
+        requestId,
+        userId: existingByAuthId.id,
+        authUserId: supabaseUser.id,
+      });
       return existingByAuthId;
     }
 
     const signupIdentity = signupIdentityFromAuthUser(supabaseUser);
-    const [existingByEmail] = await db.select().from(users).where(eq(users.email, supabaseUser.email!));
+    const [existingByEmail] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
 
     if (existingByEmail) {
       const backfilledIdentity = {
@@ -198,7 +259,11 @@ export class AuthService {
           .where(eq(users.id, existingByEmail.id))
           .returning();
 
-        logger.debug('auth.app_user_linked', { requestId, userId: updated.id, authUserId: supabaseUser.id });
+        logger.debug('auth.app_user_linked', {
+          requestId,
+          userId: updated.id,
+          authUserId: supabaseUser.id,
+        });
         return updated;
       } catch (error) {
         if (isUniqueViolation(error, 'users_phone_unique')) {
@@ -218,7 +283,7 @@ export class AuthService {
           authUserId: supabaseUser.id,
           firstName: name.firstName,
           lastName: name.lastName,
-          email: supabaseUser.email!,
+          email,
           phone: signupIdentity.phone,
           tckn: signupIdentity.tckn,
           passwordHash: null,
@@ -227,7 +292,11 @@ export class AuthService {
         })
         .returning();
 
-      logger.debug('auth.app_user_created', { requestId, userId: created.id, authUserId: supabaseUser.id });
+      logger.debug('auth.app_user_created', {
+        requestId,
+        userId: created.id,
+        authUserId: supabaseUser.id,
+      });
       return created;
     } catch (error) {
       if (isUniqueViolation(error, 'users_phone_unique')) {

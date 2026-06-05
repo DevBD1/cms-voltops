@@ -1,6 +1,12 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { sessions, userVehicles, users, vehicles } from '../db/schema';
+import {
+  connectorTypes,
+  sessions,
+  userVehicles,
+  users,
+  vehicles,
+} from '../db/schema';
 import { HttpError } from '../utils/http';
 
 export type ConnectorType = 'CCS' | 'Type-2' | 'CHAdeMO';
@@ -8,34 +14,69 @@ export type ConnectorType = 'CCS' | 'Type-2' | 'CHAdeMO';
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type DbReader = Pick<typeof db, 'select'>;
 
-export const allowedConnectorTypes: ConnectorType[] = ['CCS', 'Type-2', 'CHAdeMO'];
+export const allowedConnectorTypes: ConnectorType[] = [
+  'CCS',
+  'Type-2',
+  'CHAdeMO',
+];
+
+const legacyToConnectorCode: Record<ConnectorType, string> = {
+  CCS: 'DC_CCS2',
+  'Type-2': 'AC_TYPE2',
+  CHAdeMO: 'DC_CHADEMO',
+};
+
+export function toConnectorTypeCode(value: ConnectorType): string {
+  return legacyToConnectorCode[value];
+}
 
 export function normalizePlateNumber(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/g, '');
 }
 
 function assertValidPlateNumber(plateNumber: string): void {
-  if (plateNumber.length < 2 || plateNumber.length > 20 || !/^[A-Z0-9-]+$/.test(plateNumber)) {
-    throw new HttpError(400, 'plateNumber must be 2-20 chars using A-Z, 0-9, or -');
+  if (
+    plateNumber.length < 2 ||
+    plateNumber.length > 20 ||
+    !/^[A-Z0-9-]+$/.test(plateNumber)
+  ) {
+    throw new HttpError(
+      400,
+      'plateNumber must be 2-20 chars using A-Z, 0-9, or -',
+    );
   }
 }
 
 export class VehicleService {
-  async addVehicle(userId: number, input: { plateNumber: string; connectorType: ConnectorType }) {
+  async addVehicle(
+    userId: number,
+    input: { plateNumber: string; connectorType: ConnectorType },
+  ) {
     const plateNumber = normalizePlateNumber(input.plateNumber);
     assertValidPlateNumber(plateNumber);
 
     return db.transaction(async (tx) => {
       await this.assertUserExists(tx, userId);
 
-      const existingLinks = await tx.select().from(userVehicles).where(eq(userVehicles.userId, userId));
-      const existingLink = existingLinks.find((link) => link.vehiclePlateNumber === plateNumber);
+      const existingLinks = await tx
+        .select()
+        .from(userVehicles)
+        .where(eq(userVehicles.userId, userId));
+      const existingLink = existingLinks.find(
+        (link) => link.vehiclePlateNumber === plateNumber,
+      );
 
       if (existingLink) {
         throw new HttpError(409, 'Vehicle already linked to current user');
       }
 
-      await tx.insert(vehicles).values({ plateNumber, connectorType: input.connectorType }).onConflictDoNothing();
+      await tx
+        .insert(vehicles)
+        .values({
+          plateNumber,
+          connectorTypeCode: toConnectorTypeCode(input.connectorType),
+        })
+        .onConflictDoNothing();
       const [createdLink] = await tx
         .insert(userVehicles)
         .values({
@@ -63,7 +104,13 @@ export class VehicleService {
       const [activeSession] = await tx
         .select({ id: sessions.id })
         .from(sessions)
-        .where(and(eq(sessions.userId, userId), eq(sessions.vehiclePlateNumber, plateNumber), eq(sessions.status, 'active')));
+        .where(
+          and(
+            eq(sessions.userId, userId),
+            eq(sessions.vehiclePlateNumber, plateNumber),
+            eq(sessions.status, 'active'),
+          ),
+        );
 
       if (activeSession) {
         throw new HttpError(409, 'Vehicle has an active session');
@@ -71,7 +118,12 @@ export class VehicleService {
 
       const [removedLink] = await tx
         .delete(userVehicles)
-        .where(and(eq(userVehicles.userId, userId), eq(userVehicles.vehiclePlateNumber, plateNumber)))
+        .where(
+          and(
+            eq(userVehicles.userId, userId),
+            eq(userVehicles.vehiclePlateNumber, plateNumber),
+          ),
+        )
         .returning();
 
       if (!removedLink) {
@@ -87,12 +139,21 @@ export class VehicleService {
         const nextPrimary = remainingUserLinks[0];
 
         if (nextPrimary) {
-          await tx.update(userVehicles).set({ isPrimary: true }).where(eq(userVehicles.id, nextPrimary.id));
+          await tx
+            .update(userVehicles)
+            .set({ isPrimary: true })
+            .where(eq(userVehicles.id, nextPrimary.id));
         }
       }
 
-      const [remainingLink] = await tx.select({ id: userVehicles.id }).from(userVehicles).where(eq(userVehicles.vehiclePlateNumber, plateNumber));
-      const [referencedSession] = await tx.select({ id: sessions.id }).from(sessions).where(eq(sessions.vehiclePlateNumber, plateNumber));
+      const [remainingLink] = await tx
+        .select({ id: userVehicles.id })
+        .from(userVehicles)
+        .where(eq(userVehicles.vehiclePlateNumber, plateNumber));
+      const [referencedSession] = await tx
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.vehiclePlateNumber, plateNumber));
 
       if (!remainingLink && !referencedSession) {
         await tx.delete(vehicles).where(eq(vehicles.plateNumber, plateNumber));
@@ -102,8 +163,14 @@ export class VehicleService {
     });
   }
 
-  private async assertUserExists(tx: Transaction, userId: number): Promise<void> {
-    const [user] = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId));
+  private async assertUserExists(
+    tx: Transaction,
+    userId: number,
+  ): Promise<void> {
+    const [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId));
 
     if (!user) {
       throw new HttpError(404, 'User not found');
@@ -111,7 +178,10 @@ export class VehicleService {
   }
 
   private async getProfile(userId: number, client: DbReader = db) {
-    const [user] = await client.select().from(users).where(eq(users.id, userId));
+    const [user] = await client
+      .select()
+      .from(users)
+      .where(eq(users.id, userId));
 
     if (!user) {
       throw new HttpError(404, 'User not found');
@@ -123,10 +193,18 @@ export class VehicleService {
         relationshipType: userVehicles.relationshipType,
         isPrimary: userVehicles.isPrimary,
         plateNumber: vehicles.plateNumber,
-        connectorType: vehicles.connectorType,
+        connectorType: connectorTypes.vehicleLabel,
+        connectorTypeCode: vehicles.connectorTypeCode,
       })
       .from(userVehicles)
-      .innerJoin(vehicles, eq(userVehicles.vehiclePlateNumber, vehicles.plateNumber))
+      .innerJoin(
+        vehicles,
+        eq(userVehicles.vehiclePlateNumber, vehicles.plateNumber),
+      )
+      .innerJoin(
+        connectorTypes,
+        eq(vehicles.connectorTypeCode, connectorTypes.code),
+      )
       .where(eq(userVehicles.userId, userId));
 
     return {

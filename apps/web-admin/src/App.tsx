@@ -1,12 +1,37 @@
-import React from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { ADMIN_ROLES } from './lib/auth';
+import AdminApp from './pages/admin/AdminApp';
+import CustomerApp from './pages/customer/CustomerApp';
+import Landing from './pages/Landing';
+import LoginAdmin from './pages/LoginAdmin';
+import LoginCustomer from './pages/LoginCustomer';
 
-function App() {
+export default function App() {
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>VoltOps Web Admin</h1>
-      <p>Welcome to your Vite + React TypeScript app!</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<LoginCustomer />} />
+        <Route path="/login/admin" element={<LoginAdmin />} />
+        <Route
+          path="/app"
+          element={
+            <ProtectedRoute allowedRoles={['CUSTOMER']}>
+              <CustomerApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute allowedRoles={ADMIN_ROLES}>
+              <AdminApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;

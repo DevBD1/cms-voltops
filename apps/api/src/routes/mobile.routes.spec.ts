@@ -3,9 +3,15 @@ import request from 'supertest';
 import { createMobileRouter } from './mobile.routes';
 
 function createTestApp({
-  authService = { authenticate: jest.fn().mockResolvedValue({ appUser: { id: 7 } }) },
+  authService = {
+    authenticate: jest.fn().mockResolvedValue({ appUser: { id: 7 } }),
+  },
   catalogService = { listStations: jest.fn(), getStation: jest.fn() },
-  sessionService = { listSessions: jest.fn().mockResolvedValue([]), startSession: jest.fn(), endSession: jest.fn() },
+  sessionService = {
+    listSessions: jest.fn().mockResolvedValue([]),
+    startSession: jest.fn(),
+    endSession: jest.fn(),
+  },
   ticketService = { listTickets: jest.fn(), createTicket: jest.fn() },
   vehicleService = { addVehicle: jest.fn(), removeVehicle: jest.fn() },
 } = {}) {
@@ -25,7 +31,14 @@ function createTestApp({
       vehicleService as never,
     ),
   );
-  return { app, authService, catalogService, sessionService, ticketService, vehicleService };
+  return {
+    app,
+    authService,
+    catalogService,
+    sessionService,
+    ticketService,
+    vehicleService,
+  };
 }
 
 describe('createMobileRouter', () => {
@@ -45,7 +58,10 @@ describe('createMobileRouter', () => {
   it('rejects start session without vehiclePlateNumber', async () => {
     const { app, sessionService } = createTestApp();
 
-    const response = await request(app).post('/api/mobile/sessions').set('Authorization', 'Bearer user-token').send({ plugCode: 'PLUG-1' });
+    const response = await request(app)
+      .post('/api/mobile/sessions')
+      .set('Authorization', 'Bearer user-token')
+      .send({ plugCode: 'PLUG-1' });
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ error: 'vehiclePlateNumber is required' });
@@ -55,10 +71,14 @@ describe('createMobileRouter', () => {
   it('rejects invalid session status filters', async () => {
     const { app, sessionService } = createTestApp();
 
-    const response = await request(app).get('/api/mobile/sessions?status=pending').set('Authorization', 'Bearer user-token');
+    const response = await request(app)
+      .get('/api/mobile/sessions?status=pending')
+      .set('Authorization', 'Bearer user-token');
 
     expect(response.status).toBe(400);
-    expect(response.body).toEqual({ error: 'status must be one of: active, completed, cancelled' });
+    expect(response.body).toEqual({
+      error: 'status must be one of: active, completed, cancelled',
+    });
     expect(sessionService.listSessions).not.toHaveBeenCalled();
   });
 
@@ -71,12 +91,19 @@ describe('createMobileRouter', () => {
       .send({ plateNumber: '34ABC123', connectorType: 'Tesla' });
 
     expect(response.status).toBe(400);
-    expect(response.body).toEqual({ error: 'connectorType must be one of: CCS, Type-2, CHAdeMO' });
+    expect(response.body).toEqual({
+      error: 'connectorType must be one of: CCS, Type-2, CHAdeMO',
+    });
     expect(vehicleService.addVehicle).not.toHaveBeenCalled();
   });
 
   it('adds a vehicle for the authenticated user', async () => {
-    const profile = { user: { id: 7 }, vehicles: [{ plateNumber: '34ABC123', connectorType: 'CCS', isPrimary: true }] };
+    const profile = {
+      user: { id: 7 },
+      vehicles: [
+        { plateNumber: '34ABC123', connectorType: 'CCS', isPrimary: true },
+      ],
+    };
     const { app, vehicleService } = createTestApp({
       vehicleService: {
         addVehicle: jest.fn().mockResolvedValue(profile),
@@ -91,7 +118,10 @@ describe('createMobileRouter', () => {
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({ data: profile });
-    expect(vehicleService.addVehicle).toHaveBeenCalledWith(7, { plateNumber: '34 abc 123', connectorType: 'CCS' });
+    expect(vehicleService.addVehicle).toHaveBeenCalledWith(7, {
+      plateNumber: '34 abc 123',
+      connectorType: 'CCS',
+    });
   });
 
   it('removes a vehicle for the authenticated user', async () => {
@@ -103,7 +133,9 @@ describe('createMobileRouter', () => {
       },
     });
 
-    const response = await request(app).delete('/api/mobile/vehicles/34ABC123').set('Authorization', 'Bearer user-token');
+    const response = await request(app)
+      .delete('/api/mobile/vehicles/34ABC123')
+      .set('Authorization', 'Bearer user-token');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ data: profile });
@@ -111,7 +143,14 @@ describe('createMobileRouter', () => {
   });
 
   it('creates a ticket with authenticated user session context', async () => {
-    const ticket = { id: 12, userId: 7, sessionId: 44, stationCode: 'ST-1', title: 'Blocked charger', status: 'open' };
+    const ticket = {
+      id: 12,
+      userId: 7,
+      sessionId: 44,
+      stationCode: 'ST-1',
+      title: 'Blocked charger',
+      status: 'open',
+    };
     const { app, ticketService } = createTestApp({
       ticketService: {
         listTickets: jest.fn(),
@@ -119,14 +158,17 @@ describe('createMobileRouter', () => {
       },
     });
 
-    const response = await request(app).post('/api/mobile/tickets').set('Authorization', 'Bearer user-token').send({
-      userId: 999,
-      stationCode: 'ST-1',
-      sessionId: 44,
-      title: 'Blocked charger',
-      description: 'A vehicle is parked in the charging bay.',
-      priority: 'high',
-    });
+    const response = await request(app)
+      .post('/api/mobile/tickets')
+      .set('Authorization', 'Bearer user-token')
+      .send({
+        userId: 999,
+        stationCode: 'ST-1',
+        sessionId: 44,
+        title: 'Blocked charger',
+        description: 'A vehicle is parked in the charging bay.',
+        priority: 'high',
+      });
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({ data: ticket });

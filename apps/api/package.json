@@ -9,6 +9,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:setup": "pnpm db:migrate",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:reset-seed": "tsx src/db/reset-seed.ts",
+    "db:verify": "tsx src/db/verify.ts",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "test": "jest"
   },

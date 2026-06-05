@@ -10,8 +10,12 @@ export class TicketService {
     const ticketRows = await db.select().from(tickets);
 
     return ticketRows
-      .filter((ticket) => (filters?.userId ? ticket.userId === filters.userId : true))
-      .filter((ticket) => (filters?.status ? ticket.status === filters.status : true));
+      .filter((ticket) =>
+        filters?.userId ? ticket.userId === filters.userId : true,
+      )
+      .filter((ticket) =>
+        filters?.status ? ticket.status === filters.status : true,
+      );
   }
 
   async createTicket(input: {
@@ -72,12 +76,18 @@ export class TicketService {
   }
 
   private async userExists(userId: number): Promise<boolean> {
-    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId));
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId));
     return Boolean(user);
   }
 
   private async stationExists(stationCode: string): Promise<boolean> {
-    const [station] = await db.select({ stationCode: stations.stationCode }).from(stations).where(eq(stations.stationCode, stationCode));
+    const [station] = await db
+      .select({ stationCode: stations.stationCode })
+      .from(stations)
+      .where(eq(stations.stationCode, stationCode));
     return Boolean(station);
   }
 }
