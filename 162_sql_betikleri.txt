@@ -1,0 +1,853 @@
+Veri Tabani SQL Betikleri
+Proje: cms-voltops
+Grup No: 162
+Kaynak SQL dosya sayisi: 8
+
+================================================================================
+DOSYA: apps/api/drizzle/0000_flippant_kabuki.sql
+================================================================================
+CREATE TABLE "addresses" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"user_id" integer NOT NULL,
+	"title" varchar(100) NOT NULL,
+	"country" varchar(80) NOT NULL,
+	"city" varchar(100) NOT NULL,
+	"district" varchar(100) NOT NULL,
+	"neighborhood" varchar(100),
+	"avenue" varchar(100),
+	"street" varchar(100),
+	"apt_no" varchar(30),
+	"apt" varchar(30),
+	"door_no" varchar(30),
+	"postal_no" varchar(30)
+);
+--> statement-breakpoint
+CREATE TABLE "employees" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"user_id" integer NOT NULL,
+	"employee_code" varchar(40) NOT NULL,
+	"department" varchar(100) NOT NULL,
+	"job_title" varchar(100) NOT NULL,
+	"hire_date" date NOT NULL,
+	"status" varchar(30) DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "maintenance" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"station_code" varchar(40) NOT NULL,
+	"plug_code" varchar(60),
+	"employee_id" integer,
+	"maintenance_type" varchar(80) NOT NULL,
+	"description" text NOT NULL,
+	"scheduled_date" date NOT NULL,
+	"completed_date" date,
+	"status" varchar(30) DEFAULT 'scheduled' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "plugs" (
+	"plug_code" varchar(60) PRIMARY KEY NOT NULL,
+	"station_code" varchar(40) NOT NULL,
+	"plug_type" varchar(40) NOT NULL,
+	"power_kw" numeric(8, 2) NOT NULL,
+	"current_type" varchar(10) NOT NULL,
+	"status" varchar(30) DEFAULT 'available' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "receipts" (
+	"receipt_no" varchar(60) PRIMARY KEY NOT NULL,
+	"session_id" integer NOT NULL,
+	"subtotal" numeric(10, 2) NOT NULL,
+	"tax_amount" numeric(10, 2) NOT NULL,
+	"total_amount" numeric(10, 2) NOT NULL,
+	"currency" varchar(3) DEFAULT 'TRY' NOT NULL,
+	"issued_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "sessions" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"user_id" integer NOT NULL,
+	"plug_code" varchar(60) NOT NULL,
+	"vehicle_plate_number" varchar(20),
+	"started_at" timestamp with time zone NOT NULL,
+	"ended_at" timestamp with time zone,
+	"energy_kwh" numeric(10, 3),
+	"duration_minutes" numeric(10, 2),
+	"total_price" numeric(10, 2),
+	"status" varchar(30) DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "station_employees" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"station_code" varchar(40) NOT NULL,
+	"employee_id" integer NOT NULL,
+	"assignment_role" varchar(80) NOT NULL,
+	"assigned_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "stations" (
+	"station_code" varchar(40) PRIMARY KEY NOT NULL,
+	"name" varchar(150) NOT NULL,
+	"city" varchar(100) NOT NULL,
+	"district" varchar(100) NOT NULL,
+	"latitude" numeric(10, 6) NOT NULL,
+	"longitude" numeric(10, 6) NOT NULL,
+	"status" varchar(30) DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "tickets" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"user_id" integer NOT NULL,
+	"station_code" varchar(40),
+	"session_id" integer,
+	"assigned_employee_id" integer,
+	"title" varchar(150) NOT NULL,
+	"description" text NOT NULL,
+	"priority" varchar(30) DEFAULT 'normal' NOT NULL,
+	"status" varchar(30) DEFAULT 'open' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "user_vehicles" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"user_id" integer NOT NULL,
+	"vehicle_plate_number" varchar(20) NOT NULL,
+	"relationship_type" varchar(40) NOT NULL,
+	"is_primary" boolean DEFAULT false NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "users" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"first_name" varchar(100) NOT NULL,
+	"last_name" varchar(100) NOT NULL,
+	"tckn" integer,
+	"email" varchar(200) NOT NULL,
+	"phone" varchar(30) NOT NULL,
+	"password_hash" varchar(255) NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"marketing_consent" timestamp with time zone,
+	"terms_of_service" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "vehicles" (
+	"plate_number" varchar(20) PRIMARY KEY NOT NULL,
+	"connector_type" varchar(40) NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "addresses" ADD CONSTRAINT "addresses_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "employees" ADD CONSTRAINT "employees_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "maintenance" ADD CONSTRAINT "maintenance_station_code_stations_station_code_fk" FOREIGN KEY ("station_code") REFERENCES "public"."stations"("station_code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "maintenance" ADD CONSTRAINT "maintenance_plug_code_plugs_plug_code_fk" FOREIGN KEY ("plug_code") REFERENCES "public"."plugs"("plug_code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "maintenance" ADD CONSTRAINT "maintenance_employee_id_employees_id_fk" FOREIGN KEY ("employee_id") REFERENCES "public"."employees"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "plugs" ADD CONSTRAINT "plugs_station_code_stations_station_code_fk" FOREIGN KEY ("station_code") REFERENCES "public"."stations"("station_code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "receipts" ADD CONSTRAINT "receipts_session_id_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_plug_code_plugs_plug_code_fk" FOREIGN KEY ("plug_code") REFERENCES "public"."plugs"("plug_code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_vehicle_plate_number_vehicles_plate_number_fk" FOREIGN KEY ("vehicle_plate_number") REFERENCES "public"."vehicles"("plate_number") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "station_employees" ADD CONSTRAINT "station_employees_station_code_stations_station_code_fk" FOREIGN KEY ("station_code") REFERENCES "public"."stations"("station_code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "station_employees" ADD CONSTRAINT "station_employees_employee_id_employees_id_fk" FOREIGN KEY ("employee_id") REFERENCES "public"."employees"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_station_code_stations_station_code_fk" FOREIGN KEY ("station_code") REFERENCES "public"."stations"("station_code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_session_id_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_assigned_employee_id_employees_id_fk" FOREIGN KEY ("assigned_employee_id") REFERENCES "public"."employees"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_vehicles" ADD CONSTRAINT "user_vehicles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_vehicles" ADD CONSTRAINT "user_vehicles_vehicle_plate_number_vehicles_plate_number_fk" FOREIGN KEY ("vehicle_plate_number") REFERENCES "public"."vehicles"("plate_number") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "employees_employee_code_unique" ON "employees" USING btree ("employee_code");--> statement-breakpoint
+CREATE UNIQUE INDEX "users_email_unique" ON "users" USING btree ("email");--> statement-breakpoint
+CREATE UNIQUE INDEX "users_phone_unique" ON "users" USING btree ("phone");
+
+================================================================================
+DOSYA: apps/api/drizzle/0001_clever_namora.sql
+================================================================================
+CREATE INDEX "addresses_user_id_idx" ON "addresses" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "employees_user_id_idx" ON "employees" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "maintenance_station_code_idx" ON "maintenance" USING btree ("station_code");--> statement-breakpoint
+CREATE INDEX "maintenance_plug_code_idx" ON "maintenance" USING btree ("plug_code");--> statement-breakpoint
+CREATE INDEX "maintenance_employee_id_idx" ON "maintenance" USING btree ("employee_id");--> statement-breakpoint
+CREATE INDEX "plugs_station_code_idx" ON "plugs" USING btree ("station_code");--> statement-breakpoint
+CREATE INDEX "receipts_session_id_idx" ON "receipts" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "sessions_user_id_idx" ON "sessions" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "sessions_plug_code_idx" ON "sessions" USING btree ("plug_code");--> statement-breakpoint
+CREATE INDEX "sessions_vehicle_plate_number_idx" ON "sessions" USING btree ("vehicle_plate_number");--> statement-breakpoint
+CREATE INDEX "station_employees_station_code_idx" ON "station_employees" USING btree ("station_code");--> statement-breakpoint
+CREATE INDEX "station_employees_employee_id_idx" ON "station_employees" USING btree ("employee_id");--> statement-breakpoint
+CREATE INDEX "tickets_user_id_idx" ON "tickets" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "tickets_station_code_idx" ON "tickets" USING btree ("station_code");--> statement-breakpoint
+CREATE INDEX "tickets_session_id_idx" ON "tickets" USING btree ("session_id");--> statement-breakpoint
+CREATE INDEX "tickets_assigned_employee_id_idx" ON "tickets" USING btree ("assigned_employee_id");--> statement-breakpoint
+CREATE INDEX "user_vehicles_user_id_idx" ON "user_vehicles" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "user_vehicles_vehicle_plate_number_idx" ON "user_vehicles" USING btree ("vehicle_plate_number");
+
+================================================================================
+DOSYA: apps/api/drizzle/0002_pink_iceman.sql
+================================================================================
+ALTER TABLE "users" ALTER COLUMN "phone" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "users" ALTER COLUMN "password_hash" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "auth_user_id" uuid;--> statement-breakpoint
+CREATE UNIQUE INDEX "users_auth_user_id_unique" ON "users" USING btree ("auth_user_id");--> statement-breakpoint
+ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.maintenance ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.plugs ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.station_employees ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.stations ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.user_vehicles ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP POLICY IF EXISTS "public can read station catalog" ON public.stations;--> statement-breakpoint
+DROP POLICY IF EXISTS "public can read plug catalog" ON public.plugs;--> statement-breakpoint
+REVOKE SELECT ON public.stations, public.plugs FROM anon, authenticated;
+
+================================================================================
+DOSYA: apps/api/drizzle/0003_curved_micromacro.sql
+================================================================================
+ALTER TABLE "users" ALTER COLUMN "tckn" SET DATA TYPE varchar(11);
+
+================================================================================
+DOSYA: apps/api/drizzle/0004_eager_skaar.sql
+================================================================================
+CREATE UNIQUE INDEX "user_vehicles_user_vehicle_unique" ON "user_vehicles" USING btree ("user_id","vehicle_plate_number");
+
+================================================================================
+DOSYA: apps/api/drizzle/0005_ordinary_manta.sql
+================================================================================
+CREATE UNIQUE INDEX "sessions_active_user_unique" ON "sessions" USING btree ("user_id") WHERE "sessions"."status" = 'active';
+
+================================================================================
+DOSYA: apps/api/drizzle/0006_closed_red_skull.sql
+================================================================================
+CREATE TABLE "cities" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"country_code" varchar(2) NOT NULL,
+	"name" varchar(100) NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "connector_types" (
+	"code" varchar(40) PRIMARY KEY NOT NULL,
+	"display_name" varchar(100) NOT NULL,
+	"current_type" varchar(10) NOT NULL,
+	"vehicle_label" varchar(40) NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "districts" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"city_id" integer NOT NULL,
+	"name" varchar(100) NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "pricing_rules" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"connector_type_code" varchar(40) NOT NULL,
+	"price_per_kwh" numeric(10, 4) NOT NULL,
+	"currency" varchar(3) DEFAULT 'TRY' NOT NULL,
+	"valid_from" timestamp with time zone NOT NULL,
+	"valid_to" timestamp with time zone
+);
+--> statement-breakpoint
+CREATE TABLE "tax_rates" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"rate" numeric(5, 4) NOT NULL,
+	"valid_from" timestamp with time zone NOT NULL,
+	"valid_to" timestamp with time zone
+);
+--> statement-breakpoint
+ALTER TABLE "districts" ADD CONSTRAINT "districts_city_id_cities_id_fk" FOREIGN KEY ("city_id") REFERENCES "public"."cities"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "pricing_rules" ADD CONSTRAINT "pricing_rules_connector_type_code_connector_types_code_fk" FOREIGN KEY ("connector_type_code") REFERENCES "public"."connector_types"("code") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "cities_country_name_unique" ON "cities" USING btree ("country_code","name");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "districts_city_name_unique" ON "districts" USING btree ("city_id","name");
+--> statement-breakpoint
+CREATE INDEX "districts_city_id_idx" ON "districts" USING btree ("city_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "pricing_rules_connector_valid_from_unique" ON "pricing_rules" USING btree ("connector_type_code","valid_from");
+--> statement-breakpoint
+CREATE INDEX "pricing_rules_connector_type_code_idx" ON "pricing_rules" USING btree ("connector_type_code");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "tax_rates_valid_from_unique" ON "tax_rates" USING btree ("valid_from");
+--> statement-breakpoint
+INSERT INTO "connector_types" ("code", "display_name", "current_type", "vehicle_label") VALUES
+	('AC_TYPE2', 'AC Type 2', 'AC', 'Type-2'),
+	('DC_CCS2', 'DC CCS2', 'DC', 'CCS'),
+	('DC_CHADEMO', 'DC CHAdeMO', 'DC', 'CHAdeMO'),
+	('DC_GB_T', 'DC GB/T', 'DC', 'GB/T')
+ON CONFLICT ("code") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "pricing_rules" ("connector_type_code", "price_per_kwh", "currency", "valid_from", "valid_to")
+SELECT connector_types.code, '7.5000', 'TRY', '1970-01-01T00:00:00Z'::timestamptz, NULL
+FROM "connector_types"
+ON CONFLICT ("connector_type_code", "valid_from") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "tax_rates" ("rate", "valid_from", "valid_to") VALUES
+	('0.2000', '1970-01-01T00:00:00Z'::timestamptz, NULL)
+ON CONFLICT ("valid_from") DO NOTHING;
+--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "district_id" integer;
+--> statement-breakpoint
+ALTER TABLE "plugs" ADD COLUMN "connector_type_code" varchar(40);
+--> statement-breakpoint
+ALTER TABLE "receipts" ADD COLUMN "pricing_rule_id" integer;
+--> statement-breakpoint
+ALTER TABLE "receipts" ADD COLUMN "tax_rate_id" integer;
+--> statement-breakpoint
+ALTER TABLE "stations" ADD COLUMN "district_id" integer;
+--> statement-breakpoint
+ALTER TABLE "vehicles" ADD COLUMN "connector_type_code" varchar(40);
+--> statement-breakpoint
+INSERT INTO "cities" ("country_code", "name")
+SELECT DISTINCT 'TR', trim("city")
+FROM "stations"
+WHERE nullif(trim("city"), '') IS NOT NULL
+ON CONFLICT ("country_code", "name") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "cities" ("country_code", "name")
+SELECT DISTINCT
+	CASE WHEN length(trim("country")) = 2 THEN upper(trim("country")) ELSE 'TR' END,
+	trim("city")
+FROM "addresses"
+WHERE nullif(trim("city"), '') IS NOT NULL
+ON CONFLICT ("country_code", "name") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "districts" ("city_id", "name")
+SELECT DISTINCT cities.id, trim(stations."district")
+FROM "stations"
+INNER JOIN "cities" ON cities."country_code" = 'TR' AND cities."name" = trim(stations."city")
+WHERE nullif(trim(stations."district"), '') IS NOT NULL
+ON CONFLICT ("city_id", "name") DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "districts" ("city_id", "name")
+SELECT DISTINCT cities.id, trim(addresses."district")
+FROM "addresses"
+INNER JOIN "cities" ON cities."country_code" = CASE WHEN length(trim(addresses."country")) = 2 THEN upper(trim(addresses."country")) ELSE 'TR' END
+	AND cities."name" = trim(addresses."city")
+WHERE nullif(trim(addresses."district"), '') IS NOT NULL
+ON CONFLICT ("city_id", "name") DO NOTHING;
+--> statement-breakpoint
+UPDATE "stations"
+SET "district_id" = districts.id
+FROM "districts"
+INNER JOIN "cities" ON districts."city_id" = cities.id
+WHERE cities."country_code" = 'TR'
+	AND cities."name" = trim(stations."city")
+	AND districts."name" = trim(stations."district");
+--> statement-breakpoint
+UPDATE "addresses"
+SET "district_id" = districts.id
+FROM "districts"
+INNER JOIN "cities" ON districts."city_id" = cities.id
+WHERE cities."country_code" = CASE WHEN length(trim(addresses."country")) = 2 THEN upper(trim(addresses."country")) ELSE 'TR' END
+	AND cities."name" = trim(addresses."city")
+	AND districts."name" = trim(addresses."district");
+--> statement-breakpoint
+UPDATE "plugs"
+SET "connector_type_code" = CASE "plug_type"
+	WHEN 'AC_TYPE2' THEN 'AC_TYPE2'
+	WHEN 'DC_CCS2' THEN 'DC_CCS2'
+	WHEN 'DC_CHADEMO' THEN 'DC_CHADEMO'
+	WHEN 'DC_GB_T' THEN 'DC_GB_T'
+	WHEN 'Type-2' THEN 'AC_TYPE2'
+	WHEN 'Type 2' THEN 'AC_TYPE2'
+	WHEN 'CCS' THEN 'DC_CCS2'
+	WHEN 'CHAdeMO' THEN 'DC_CHADEMO'
+	ELSE NULL
+END;
+--> statement-breakpoint
+UPDATE "vehicles"
+SET "connector_type_code" = CASE "connector_type"
+	WHEN 'Type-2' THEN 'AC_TYPE2'
+	WHEN 'CCS' THEN 'DC_CCS2'
+	WHEN 'CHAdeMO' THEN 'DC_CHADEMO'
+	ELSE NULL
+END;
+--> statement-breakpoint
+UPDATE "receipts"
+SET "tax_rate_id" = tax_rates.id
+FROM "tax_rates"
+WHERE tax_rates."valid_from" = '1970-01-01T00:00:00Z'::timestamptz;
+--> statement-breakpoint
+UPDATE "receipts"
+SET "pricing_rule_id" = pricing_rules.id
+FROM "sessions"
+INNER JOIN "plugs" ON sessions."plug_code" = plugs."plug_code"
+INNER JOIN "pricing_rules" ON pricing_rules."connector_type_code" = plugs."connector_type_code"
+	AND pricing_rules."valid_from" = '1970-01-01T00:00:00Z'::timestamptz
+WHERE receipts."session_id" = sessions.id;
+--> statement-breakpoint
+DO $$
+DECLARE
+	mismatch_count integer;
+BEGIN
+	SELECT count(*) INTO mismatch_count
+	FROM "receipts"
+	INNER JOIN "sessions" ON receipts."session_id" = sessions.id
+	INNER JOIN "pricing_rules" ON receipts."pricing_rule_id" = pricing_rules.id
+	INNER JOIN "tax_rates" ON receipts."tax_rate_id" = tax_rates.id
+	WHERE receipts."subtotal" IS DISTINCT FROM round((sessions."energy_kwh" * pricing_rules."price_per_kwh")::numeric, 2)
+		OR receipts."tax_amount" IS DISTINCT FROM round((round((sessions."energy_kwh" * pricing_rules."price_per_kwh")::numeric, 2) * tax_rates."rate")::numeric, 2)
+		OR receipts."total_amount" IS DISTINCT FROM (
+			round((sessions."energy_kwh" * pricing_rules."price_per_kwh")::numeric, 2)
+			+ round((round((sessions."energy_kwh" * pricing_rules."price_per_kwh")::numeric, 2) * tax_rates."rate")::numeric, 2)
+		)
+		OR receipts."currency" IS DISTINCT FROM pricing_rules."currency";
+
+	IF mismatch_count > 0 THEN
+		RAISE EXCEPTION 'receipt amount validation failed for % rows', mismatch_count;
+	END IF;
+END $$;
+--> statement-breakpoint
+DO $$
+DECLARE
+	failure_count integer;
+BEGIN
+	SELECT count(*) INTO failure_count FROM "stations" WHERE "district_id" IS NULL;
+	IF failure_count > 0 THEN RAISE EXCEPTION 'station geography backfill failed for % rows', failure_count; END IF;
+
+	SELECT count(*) INTO failure_count FROM "addresses" WHERE "district_id" IS NULL;
+	IF failure_count > 0 THEN RAISE EXCEPTION 'address geography backfill failed for % rows', failure_count; END IF;
+
+	SELECT count(*) INTO failure_count FROM "plugs" WHERE "connector_type_code" IS NULL OR NOT EXISTS (
+		SELECT 1 FROM "connector_types" WHERE connector_types."code" = plugs."connector_type_code"
+	);
+	IF failure_count > 0 THEN RAISE EXCEPTION 'plug connector backfill failed for % rows', failure_count; END IF;
+
+	SELECT count(*) INTO failure_count FROM "vehicles" WHERE "connector_type_code" IS NULL OR NOT EXISTS (
+		SELECT 1 FROM "connector_types" WHERE connector_types."code" = vehicles."connector_type_code"
+	);
+	IF failure_count > 0 THEN RAISE EXCEPTION 'vehicle connector backfill failed for % rows', failure_count; END IF;
+
+	SELECT count(*) INTO failure_count FROM "receipts" WHERE "pricing_rule_id" IS NULL OR "tax_rate_id" IS NULL;
+	IF failure_count > 0 THEN RAISE EXCEPTION 'receipt determinant backfill failed for % rows', failure_count; END IF;
+
+	SELECT count(*) INTO failure_count
+	FROM (
+		SELECT "user_id"
+		FROM "employees"
+		GROUP BY "user_id"
+		HAVING count(*) > 1
+	) duplicates;
+	IF failure_count > 0 THEN RAISE EXCEPTION 'employees.user_id unique constraint would fail for % users', failure_count; END IF;
+
+	SELECT count(*) INTO failure_count
+	FROM (
+		SELECT "session_id"
+		FROM "receipts"
+		GROUP BY "session_id"
+		HAVING count(*) > 1
+	) duplicates;
+	IF failure_count > 0 THEN RAISE EXCEPTION 'receipts.session_id unique constraint would fail for % sessions', failure_count; END IF;
+END $$;
+--> statement-breakpoint
+ALTER TABLE "addresses" ALTER COLUMN "district_id" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "plugs" ALTER COLUMN "connector_type_code" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "receipts" ALTER COLUMN "pricing_rule_id" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "receipts" ALTER COLUMN "tax_rate_id" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "stations" ALTER COLUMN "district_id" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "vehicles" ALTER COLUMN "connector_type_code" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "addresses" ADD CONSTRAINT "addresses_district_id_districts_id_fk" FOREIGN KEY ("district_id") REFERENCES "public"."districts"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "plugs" ADD CONSTRAINT "plugs_connector_type_code_connector_types_code_fk" FOREIGN KEY ("connector_type_code") REFERENCES "public"."connector_types"("code") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "receipts" ADD CONSTRAINT "receipts_pricing_rule_id_pricing_rules_id_fk" FOREIGN KEY ("pricing_rule_id") REFERENCES "public"."pricing_rules"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "receipts" ADD CONSTRAINT "receipts_tax_rate_id_tax_rates_id_fk" FOREIGN KEY ("tax_rate_id") REFERENCES "public"."tax_rates"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "stations" ADD CONSTRAINT "stations_district_id_districts_id_fk" FOREIGN KEY ("district_id") REFERENCES "public"."districts"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "vehicles" ADD CONSTRAINT "vehicles_connector_type_code_connector_types_code_fk" FOREIGN KEY ("connector_type_code") REFERENCES "public"."connector_types"("code") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+CREATE INDEX "addresses_district_id_idx" ON "addresses" USING btree ("district_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "employees_user_id_unique" ON "employees" USING btree ("user_id");
+--> statement-breakpoint
+CREATE INDEX "plugs_connector_type_code_idx" ON "plugs" USING btree ("connector_type_code");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "receipts_session_id_unique" ON "receipts" USING btree ("session_id");
+--> statement-breakpoint
+CREATE INDEX "receipts_pricing_rule_id_idx" ON "receipts" USING btree ("pricing_rule_id");
+--> statement-breakpoint
+CREATE INDEX "receipts_tax_rate_id_idx" ON "receipts" USING btree ("tax_rate_id");
+--> statement-breakpoint
+CREATE INDEX "stations_district_id_idx" ON "stations" USING btree ("district_id");
+--> statement-breakpoint
+ALTER TABLE "addresses" DROP COLUMN "country";
+--> statement-breakpoint
+ALTER TABLE "addresses" DROP COLUMN "city";
+--> statement-breakpoint
+ALTER TABLE "addresses" DROP COLUMN "district";
+--> statement-breakpoint
+ALTER TABLE "plugs" DROP COLUMN "plug_type";
+--> statement-breakpoint
+ALTER TABLE "plugs" DROP COLUMN "current_type";
+--> statement-breakpoint
+ALTER TABLE "receipts" DROP COLUMN "subtotal";
+--> statement-breakpoint
+ALTER TABLE "receipts" DROP COLUMN "tax_amount";
+--> statement-breakpoint
+ALTER TABLE "receipts" DROP COLUMN "total_amount";
+--> statement-breakpoint
+ALTER TABLE "receipts" DROP COLUMN "currency";
+--> statement-breakpoint
+ALTER TABLE "sessions" DROP COLUMN "duration_minutes";
+--> statement-breakpoint
+ALTER TABLE "sessions" DROP COLUMN "total_price";
+--> statement-breakpoint
+ALTER TABLE "stations" DROP COLUMN "city";
+--> statement-breakpoint
+ALTER TABLE "stations" DROP COLUMN "district";
+--> statement-breakpoint
+ALTER TABLE "vehicles" DROP COLUMN "connector_type";
+--> statement-breakpoint
+ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE public.connector_types ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE public.districts ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE public.pricing_rules ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE public.tax_rates ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+REVOKE SELECT ON public.cities, public.connector_types, public.districts, public.pricing_rules, public.tax_rates FROM anon, authenticated;
+
+================================================================================
+DOSYA: apps/api/drizzle/0007_db_features.sql
+================================================================================
+CREATE OR REPLACE VIEW public.view_station_catalog AS
+SELECT
+	stations.station_code,
+	stations.name AS station_name,
+	stations.status AS station_status,
+	stations.latitude,
+	stations.longitude,
+	cities.country_code,
+	cities.name AS city_name,
+	districts.name AS district_name,
+	count(plugs.plug_code)::integer AS total_plugs,
+	count(plugs.plug_code) FILTER (WHERE plugs.status = 'available')::integer AS available_plugs,
+	count(plugs.plug_code) FILTER (WHERE plugs.status = 'fault')::integer AS faulty_plugs,
+	coalesce(max(plugs.power_kw), 0)::numeric(8, 2) AS max_power_kw,
+	array_remove(array_agg(DISTINCT connector_types.code), NULL) AS connector_type_codes
+FROM public.stations
+INNER JOIN public.districts ON stations.district_id = districts.id
+INNER JOIN public.cities ON districts.city_id = cities.id
+LEFT JOIN public.plugs ON plugs.station_code = stations.station_code
+LEFT JOIN public.connector_types ON plugs.connector_type_code = connector_types.code
+GROUP BY
+	stations.station_code,
+	stations.name,
+	stations.status,
+	stations.latitude,
+	stations.longitude,
+	cities.country_code,
+	cities.name,
+	districts.name;
+--> statement-breakpoint
+CREATE OR REPLACE VIEW public.view_connector_pricing AS
+SELECT
+	connector_types.code AS connector_type_code,
+	connector_types.display_name,
+	connector_types.current_type,
+	connector_types.vehicle_label,
+	pricing_rules.price_per_kwh,
+	pricing_rules.currency,
+	tax_rates.rate AS tax_rate,
+	pricing_rules.valid_from AS pricing_valid_from,
+	pricing_rules.valid_to AS pricing_valid_to,
+	tax_rates.valid_from AS tax_valid_from,
+	tax_rates.valid_to AS tax_valid_to
+FROM public.connector_types
+INNER JOIN public.pricing_rules
+	ON pricing_rules.connector_type_code = connector_types.code
+	AND pricing_rules.valid_from <= now()
+	AND (pricing_rules.valid_to IS NULL OR pricing_rules.valid_to > now())
+CROSS JOIN LATERAL (
+	SELECT tax_rates.rate, tax_rates.valid_from, tax_rates.valid_to
+	FROM public.tax_rates
+	WHERE tax_rates.valid_from <= now()
+		AND (tax_rates.valid_to IS NULL OR tax_rates.valid_to > now())
+	ORDER BY tax_rates.valid_from DESC
+	LIMIT 1
+) tax_rates
+WHERE pricing_rules.valid_from = (
+	SELECT max(active_pricing.valid_from)
+	FROM public.pricing_rules active_pricing
+	WHERE active_pricing.connector_type_code = connector_types.code
+		AND active_pricing.valid_from <= now()
+		AND (active_pricing.valid_to IS NULL OR active_pricing.valid_to > now())
+);
+--> statement-breakpoint
+GRANT SELECT ON public.view_station_catalog TO anon, authenticated;
+--> statement-breakpoint
+GRANT SELECT ON public.view_connector_pricing TO anon, authenticated;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	NEW.updated_at = now();
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.set_employee_code()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	IF NEW.employee_code IS NULL OR btrim(NEW.employee_code) = '' THEN
+		NEW.employee_code = 'EMP-' || lpad(NEW.id::text, 4, '0');
+	END IF;
+
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER users_set_updated_at
+BEFORE UPDATE ON public.users
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER employees_set_updated_at
+BEFORE UPDATE ON public.employees
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER stations_set_updated_at
+BEFORE UPDATE ON public.stations
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER plugs_set_updated_at
+BEFORE UPDATE ON public.plugs
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER sessions_set_updated_at
+BEFORE UPDATE ON public.sessions
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER receipts_set_updated_at
+BEFORE UPDATE ON public.receipts
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER maintenance_set_updated_at
+BEFORE UPDATE ON public.maintenance
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER tickets_set_updated_at
+BEFORE UPDATE ON public.tickets
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+--> statement-breakpoint
+CREATE TRIGGER employees_set_employee_code
+BEFORE INSERT ON public.employees
+FOR EACH ROW EXECUTE FUNCTION public.set_employee_code();
+--> statement-breakpoint
+CREATE OR REPLACE PROCEDURE public.proc_start_session(
+	IN p_user_id integer,
+	IN p_plug_code varchar,
+	IN p_vehicle_plate_number varchar,
+	INOUT session_id integer DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+	v_user_is_active boolean;
+	v_plug_exists boolean;
+	v_constraint_name text;
+BEGIN
+	SELECT users.is_active INTO v_user_is_active
+	FROM public.users
+	WHERE users.id = p_user_id;
+
+	IF v_user_is_active IS DISTINCT FROM true THEN
+		RAISE EXCEPTION 'Active user not found';
+	END IF;
+
+	IF EXISTS (
+		SELECT 1
+		FROM public.sessions
+		WHERE sessions.user_id = p_user_id
+			AND sessions.status = 'active'
+	) THEN
+		RAISE EXCEPTION 'Active session already exists';
+	END IF;
+
+	IF p_vehicle_plate_number IS NOT NULL AND NOT EXISTS (
+		SELECT 1
+		FROM public.user_vehicles
+		WHERE user_vehicles.user_id = p_user_id
+			AND user_vehicles.vehicle_plate_number = p_vehicle_plate_number
+	) THEN
+		RAISE EXCEPTION 'Vehicle not found';
+	END IF;
+
+	UPDATE public.plugs
+	SET status = 'in_use'
+	WHERE plugs.plug_code = p_plug_code
+		AND plugs.status = 'available';
+
+	IF NOT FOUND THEN
+		SELECT EXISTS (
+			SELECT 1 FROM public.plugs WHERE plugs.plug_code = p_plug_code
+		) INTO v_plug_exists;
+
+		IF NOT v_plug_exists THEN
+			RAISE EXCEPTION 'Plug not found';
+		END IF;
+
+		RAISE EXCEPTION 'Plug is not available';
+	END IF;
+
+	INSERT INTO public.sessions (
+		user_id,
+		plug_code,
+		vehicle_plate_number,
+		started_at,
+		status
+	) VALUES (
+		p_user_id,
+		p_plug_code,
+		p_vehicle_plate_number,
+		now(),
+		'active'
+	)
+	RETURNING id INTO session_id;
+EXCEPTION
+	WHEN unique_violation THEN
+		GET STACKED DIAGNOSTICS v_constraint_name = CONSTRAINT_NAME;
+		IF v_constraint_name = 'sessions_active_user_unique' THEN
+			RAISE EXCEPTION 'Active session already exists';
+		END IF;
+		RAISE;
+END;
+$$;
+--> statement-breakpoint
+REVOKE EXECUTE ON PROCEDURE public.proc_start_session(integer, varchar, varchar, integer) FROM PUBLIC, anon, authenticated;
+--> statement-breakpoint
+CREATE OR REPLACE PROCEDURE public.proc_end_session(
+	IN p_session_id integer,
+	IN p_energy_kwh numeric,
+	IN p_actor_user_id integer,
+	INOUT completed_session_id integer DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+	v_user_id integer;
+	v_plug_code varchar;
+	v_status varchar;
+	v_connector_type_code varchar;
+	v_pricing_rule_id integer;
+	v_tax_rate_id integer;
+BEGIN
+	SELECT
+		sessions.user_id,
+		sessions.plug_code,
+		sessions.status
+	INTO
+		v_user_id,
+		v_plug_code,
+		v_status
+	FROM public.sessions
+	WHERE sessions.id = p_session_id
+	FOR UPDATE;
+
+	IF NOT FOUND THEN
+		RAISE EXCEPTION 'Session not found';
+	END IF;
+
+	IF p_actor_user_id IS NOT NULL AND v_user_id <> p_actor_user_id THEN
+		RAISE EXCEPTION 'Session not found';
+	END IF;
+
+	IF v_status <> 'active' THEN
+		RAISE EXCEPTION 'Session is not active';
+	END IF;
+
+	IF p_energy_kwh <= 0 THEN
+		RAISE EXCEPTION 'energyKwh must be greater than zero';
+	END IF;
+
+	SELECT plugs.connector_type_code INTO v_connector_type_code
+	FROM public.plugs
+	WHERE plugs.plug_code = v_plug_code;
+
+	IF NOT FOUND THEN
+		RAISE EXCEPTION 'Plug not found';
+	END IF;
+
+	SELECT pricing_rules.id INTO v_pricing_rule_id
+	FROM public.pricing_rules
+	WHERE pricing_rules.connector_type_code = v_connector_type_code
+		AND pricing_rules.valid_from <= now()
+		AND (pricing_rules.valid_to IS NULL OR pricing_rules.valid_to > now())
+	ORDER BY pricing_rules.valid_from DESC
+	LIMIT 1;
+
+	IF v_pricing_rule_id IS NULL THEN
+		RAISE EXCEPTION 'Active pricing rule not found';
+	END IF;
+
+	SELECT tax_rates.id INTO v_tax_rate_id
+	FROM public.tax_rates
+	WHERE tax_rates.valid_from <= now()
+		AND (tax_rates.valid_to IS NULL OR tax_rates.valid_to > now())
+	ORDER BY tax_rates.valid_from DESC
+	LIMIT 1;
+
+	IF v_tax_rate_id IS NULL THEN
+		RAISE EXCEPTION 'Active tax rate not found';
+	END IF;
+
+	UPDATE public.sessions
+	SET
+		ended_at = now(),
+		energy_kwh = p_energy_kwh,
+		status = 'completed'
+	WHERE sessions.id = p_session_id;
+
+	UPDATE public.plugs
+	SET status = 'available'
+	WHERE plugs.plug_code = v_plug_code;
+
+	INSERT INTO public.receipts (
+		receipt_no,
+		session_id,
+		pricing_rule_id,
+		tax_rate_id,
+		issued_at
+	) VALUES (
+		'R-' || lpad(p_session_id::text, 6, '0'),
+		p_session_id,
+		v_pricing_rule_id,
+		v_tax_rate_id,
+		now()
+	)
+	ON CONFLICT DO NOTHING;
+
+	completed_session_id = p_session_id;
+END;
+$$;
+--> statement-breakpoint
+REVOKE EXECUTE ON PROCEDURE public.proc_end_session(integer, numeric, integer, integer) FROM PUBLIC, anon, authenticated;
