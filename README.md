@@ -21,7 +21,7 @@ Elektrikli araç (EV) kullanımının hızla artması, şarj istasyonu ağların
 
 1. **Varlık ve Altyapı Yönetimi:** Şarj istasyonlarının konumlarının (`stations`), bu istasyonlarda bulunan farklı güç kapasitelerine (`power_kw`) ve akım tiplerine (AC/DC) sahip soketlerin (`plugs`) tek bir sistemden yönetilebilmesi.
 2. **Kullanıcı ve Yetki Yönetimi:** Şarj hizmeti alan son kullanıcılar (`users`) ile sistemin işleyişinden ve bakımından sorumlu çalışanların (`employees`) yönetilmesi, admin panel yetkilerinin kontrol edilmesi.
-3. **Oturum ve Rezervasyon Kontrolü:** Aynı şarj soketinin aynı anda birden fazla araç tarafından kullanılmasının önlenmesi (double-booking engelleme), seans başlatma ve bitirme işlemlerinin atomik olarak gerçekleştirilmesi.
+3. **Oturum Kontrolü:** Aynı şarj soketinin aynı anda birden fazla araç tarafından kullanılmasının önlenmesi (double-booking engelleme), seans başlatma ve bitirme işlemlerinin atomik olarak gerçekleştirilmesi.
 4. **Fiyatlandırma ve Faturalandırma:** Zamanla değişen fiyat kurallarının (`pricing_rules`) ve vergi oranlarının (`tax_rates`) geriye dönük veri tutarlılığını bozmadan yönetilmesi, tamamlanan şarj seanslarına bağlı olarak otomatik fatura (`receipts`) oluşturulması.
 5. **Operasyonel Destek ve Bakım:** İstasyonlarda meydana gelen arızaların giderilmesi için teknik ekiplerin atanması (`maintenance`) ve kullanıcıların yaşadığı sorunlar için destek talebi oluşturabilmesi (`tickets`).
 
@@ -42,7 +42,7 @@ Projenin üç ayrı uygulama içermesi (API, web yönetici paneli, mobil uygulam
 Supabase Postgres'e doğrudan bağlanılmaya çalışıldığında, AWS eu-central-1 bölgesinin yalnızca IPv6 adresi dönüşü nedeniyle yerel geliştirme ortamından erişim sağlanamadığı tespit edilmiştir. Supabase'in sunduğu session pooler ve transaction pooler seçenekleri karşılaştırılmış; uzun süreli API işlemleri için session pooler'ın uygun olduğu, ancak migrate işlemleri için doğrudan bağlantının gerektiği anlaşılmıştır [3]. SSL zorunluluğu ve bağlantı parametrelerinin doğru yapılandırılması bu araştırma sürecinin çıktısıdır [1].
 
 #### Kimlik Doğrulama Mimarisi
-Supabase Auth kullanımında istemcilerin iş tablolarına (sessions, tickets vb.) doğrudan erişmesi yerine Express API'nin tek iş verisi sınırı olarak tanımlanmasına karar verilmiştir. Bu kararın temelinde Row Level Security (RLS) politikalarının sunucu tarafında tek noktada kontrol edilmesi [2] ve JWT token'ının yalnızca Express'te doğrulanarak kullanıcı kimliğinin istemci parametrelerine bağımlı olmaması yatmaktadır. İlk girişte public.users tablosuna satır oluşturulmaması sorunuyla karşılaşılmış; Supabase Auth tetikleyicisinin yokluğu araştırılmış ve kayıt akışına servis katmanında açık bir kayıt adımı eklenmiştir [1].
+Supabase Auth kullanımında istemcilerin iş tablolarına (sessions, tickets vb.) doğrudan erişmesi yerine Express API'nin tek iş verisi sınırı olarak tanımlanmasına karar verilmiştir. Bu kararın temelinde veritabanı tablolarında RLS'nin etkinleştirilmesi, istemci rollerinin doğrudan tablo yetkilerinin kısıtlanması ve JWT token'ının yalnızca Express'te doğrulanarak kullanıcı kimliğinin istemci parametrelerine bağımlı olmaması yatmaktadır [2]. İlk girişte public.users tablosuna satır oluşturulmaması sorunuyla karşılaşılmış; Supabase Auth tetikleyicisinin yokluğu araştırılmış ve kayıt akışına servis katmanında açık bir kayıt adımı eklenmiştir [1].
 
 #### Mobil Deep Link ve OAuth Yönlendirmesi
 Expo Go ile geliştirme buildleri arasında OAuth callback URL şemasının farklılaşması (exp:// ve voltops://) beklenmedik bir sorun olarak ortaya çıkmıştır. Expo Router'ın bağlantı çözümleme davranışı [7] ve Supabase Dashboard'daki yönlendirme URL izin listesi araştırılmış [4]; her iki şema için ayrı kayıt yapılması gerektiği belirlenmiştir. Expo Linking kütüphanesinin deep link yaşam döngüsü de bu süreçte incelenmiştir [8].
@@ -51,7 +51,7 @@ Expo Go ile geliştirme buildleri arasında OAuth callback URL şemasının fark
 TypeScript ile PostgreSQL kullanımında Prisma, TypeORM ve Drizzle ORM değerlendirilmiştir. Prisma'nın runtime bağımlılığı ve sorgu motorunun ayrı bir binary gerektirmesi container imaj boyutunu olumsuz etkilediğinden Drizzle ORM tercih edilmiştir [6]. Drizzle'ın şema tanımını doğrudan TypeScript'te tutması ve ürettiği SQL'in öngörülebilir olması da bu kararda belirleyici olmuştur [17].
 
 #### Frontend Framework Değişikliği
-Yönetici paneli başlangıçta Next.js üzerine kurulmuştu. Panel yalnızca kimlik doğrulamalı kullanıcılara hizmet veren ve SEO gerektirmeyen dahili bir SPA olduğundan, sunucu tarafı render getirisi olmayan Next.js yerine Vite + React tercih edilmiştir [11]. Sayfa yönlendirmesi için React Router kullanılmış [12], stil katmanında ise TailwindCSS ve NativeWind benimsenmiştir [15] [10]. Bu değişiklik derleme süresini belirgin biçimde kısaltmıştır. Mobil uygulama ise React Native ve Expo ekosistemi üzerine inşa edilmiştir [9] [7].
+Web arayüzü başlangıçta Next.js üzerine kurulmuştu. Admin paneli ve müşteri portalı yalnızca kimlik doğrulamalı kullanıcılara hizmet veren ve SEO gerektirmeyen dahili SPA ekranları olduğundan, sunucu tarafı render getirisi olmayan Next.js yerine Vite + React tercih edilmiştir [11]. Sayfa yönlendirmesi için React Router kullanılmış [12], stil katmanında ise web tarafında TailwindCSS, mobil tarafta NativeWind benimsenmiştir [15] [10]. Bu değişiklik derleme süresini belirgin biçimde kısaltmıştır. Mobil uygulama ise React Native ve Expo ekosistemi üzerine inşa edilmiştir [9] [7].
 
 ---
 
@@ -60,6 +60,7 @@ Projedeki kritik iş mantıklarının süreç yönetimini gösteren iki ana akı
 
 #### 1. Şarj Oturumu Yaşam Döngüsü (Start & End Session)
 Bu şema, bir kullanıcının şarj istasyonunda oturum başlatması ve bitirmesi süreçlerinin veri tabanı seviyesindeki kontrol adımlarını göstermektedir.
+Mobil API akışında `vehiclePlateNumber` zorunlu tutulur; saklı yordam ve admin akışı ise araç plakası belirtilmeden de çağrılabilecek şekilde tasarlanmıştır.
 
 ```mermaid
 flowchart TD
@@ -79,29 +80,37 @@ flowchart TD
     subgraph END_FLOW["Oturum Sonlandirma Akisi"]
         B1["Kullanici veya sistem: seans bitirme istegi"] --> B2{"Seans mevcut ve aktif mi?"}
         B2 -->|"Hayir"| B3["Hata: aktif seans bulunamadi"]
-        B2 -->|"Evet"| B4{"Tuketilen enerji 0 kWh'den buyuk mu?"}
-        B4 -->|"Hayir"| B5["Hata: enerji degeri gecersiz"]
-        B4 -->|"Evet"| B6["Aktif fiyat kuralini ve vergi oranini cek"]
-        B6 --> B7["Seansi kapat: status completed"]
-        B7 --> B8["Soket durumunu available yap"]
-        B8 --> B9["Receipts tablosuna fatura kaydi ekle"]
+        B2 -->|"Evet"| B4{"Mobil kullanici seansin sahibi mi?"}
+        B4 -->|"Hayir"| B3
+        B4 -->|"Admin veya sahibi"| B5{"Tuketilen enerji 0 kWh'den buyuk mu?"}
+        B5 -->|"Hayir"| B6["Hata: enerji degeri gecersiz"]
+        B5 -->|"Evet"| B7["Aktif fiyat kuralini ve vergi oranini cek"]
+        B7 --> B8["Seansi kapat: status completed"]
+        B8 --> B9["Soket durumunu available yap"]
+        B9 --> B10["Receipts tablosuna fatura kaydi ekle"]
     end
 ```
 
 #### 2. Kimlik Doğrulama ve Kullanıcı Eşitleme Akışı (Auth & Sync)
-Bu şema, mobil ve yönetici istemcilerinin kimlik doğrulama süreçleri ve yerel Postgres veritabanı ile nasıl senkronize edildiklerini gösterir.
+Bu şema, mobil istemci ile web admin/müşteri istemcisinin kimlik doğrulama süreçleri ve yerel Postgres veritabanı ile nasıl senkronize edildiklerini gösterir.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Client as Mobil/Admin Istemci
+    participant Mobile as Mobil Istemci
+    participant Web as Web Admin ve Customer
     participant SupaAuth as Supabase Auth
     participant API as Express API (AuthService)
     participant DB as PostgreSQL (Supabase)
 
-    Client->>SupaAuth: Kullanici giris bilgileri (OAuth/Email)
-    SupaAuth-->>Client: Supabase JWT (Access Token)
-    Client->>API: HTTP talebi ve Bearer JWT
+    Mobile->>SupaAuth: signIn/signUp veya OAuth
+    SupaAuth-->>Mobile: Supabase JWT
+    Mobile->>API: Korumali API talebi ve Bearer JWT
+    Web->>API: /api/auth/login email ve sifre
+    API->>SupaAuth: signInWithPassword
+    SupaAuth-->>API: Supabase JWT ve kullanici profili
+    API-->>Web: Token ve uygulama kullanicisi
+    Web->>API: Korumali API talebi ve Bearer JWT
     API->>SupaAuth: JWT dogrulama talebi
     SupaAuth-->>API: Kullanici profili
     API->>DB: users tablosunda auth_user_id veya e-posta ile sorgula
@@ -111,8 +120,9 @@ sequenceDiagram
         API->>DB: Eksik profil alanlarini guncelle
     end
     DB-->>API: Yerel kullanici kaydi
-    API->>API: Admin ise employees yetkisini kontrol et
-    API-->>Client: Istek yaniti (JSON)
+    API->>API: Admin endpoint ise aktif employees kaydini kontrol et
+    API-->>Mobile: Istek yaniti (JSON)
+    API-->>Web: Istek yaniti (JSON)
 ```
 
 ---
@@ -124,16 +134,16 @@ VoltOps projesi, monorepo mimarisi kullanılarak geliştirilmiş ve servislerin 
  Kök Dizin (Root)
  ├── apps/
  │   ├── api/             --> Node.js & Express REST API (İş mantığı katmanı)
- │   ├── web-admin/       --> Vite + React SPA (Yönetici Paneli)
+ │   ├── web-admin/       --> Vite + React SPA (Yönetici paneli ve müşteri portalı)
  │   └── mobile/          --> Expo + React Native & NativeWind (Sürücü Uygulaması)
  └── packages/
-     ├── database/        --> ERD, Drizzle şemaları ve migration yardımcıları
+     ├── database/        --> Veritabanı tasarım dokümanı ve Docker Compose kısayolları
      ├── types/           --> Paylaşılan ortak TypeScript tipleri ve arayüzleri
      └── utils/           --> Ortak yardımcı kütüphaneler
 ```
 
-- **İş Sınırları Kuralı:** İstemciler (mobil ve yönetici paneli) doğrudan Supabase Postgres tablosuna SQL sorgusu atamazlar veya Supabase REST API'sini veri tabanı mutasyonları için doğrudan kullanamazlar. Tüm işlemler, Row-Level Security (RLS) politikaları gereği Express API katmanından geçmek zorundadır.
-- **ORM Katmanı:** SQL şeması Drizzle ORM kullanılarak TypeScript ile tanımlanmış olup, `drizzle-kit` yardımıyla migrations SQL'leri otomatik üretilir.
+- **İş Sınırları Kuralı:** İstemciler (mobil, müşteri portalı ve yönetici paneli) iş tablolarına doğrudan SQL veya Supabase REST mutasyonu göndermez. Veri okuma/yazma işlemleri Express API katmanından geçer; veritabanında RLS etkinleştirilmiş ve istemci rollerinin doğrudan tablo erişimleri kısıtlanmıştır.
+- **ORM Katmanı:** SQL şeması `apps/api/src/db/schema.ts` içinde Drizzle ORM kullanılarak TypeScript ile tanımlanmış olup, `drizzle-kit` yardımıyla `apps/api/drizzle/` altındaki migration SQL'leri üretilir.
 
 ---
 
@@ -365,7 +375,7 @@ Büyük veri tablolarında sorguların performanslı çalışması, yabancı ana
     *Amaç:* Bir kullanıcının aynı anda birden fazla aktif şarj oturumu başlatmasını engellemek için mükemmel bir yöntemdir. Eğer kullanıcı yeni bir aktif seans başlatmaya çalışırsa ve zaten `status = 'active'` olan bir satırı varsa veri tabanı bu benzersizlik ihlaliyle işlemi doğrudan reddeder.
 
 #### 2. VIEW (Görünümler)
-İstemci tarafında karmaşık JOIN sorguları yazılmasını engellemek ve güvenlik sınırlarını korumak amacıyla iki kritik SQL görünümü (`VIEW`) tanımlanmıştır. Bu görünümler hem `anon` hem de `authenticated` rolleri için `SELECT` yetkisine sahiptir.
+Karmaşık JOIN sorgularını tek SQL nesnesinde toplamak ve izinli okuma yüzeyi sunmak amacıyla iki kritik SQL görünümü (`VIEW`) tanımlanmıştır. Bu görünümler hem `anon` hem de `authenticated` rolleri için `SELECT` yetkisine sahiptir; uygulama API'si ise aynı veri modelini Drizzle join sorguları üzerinden de üretmektedir.
 
 *   **`public.view_station_catalog`:**
     ```sql
@@ -391,10 +401,10 @@ Büyük veri tablolarında sorguların performanslı çalışması, yabancı ana
     LEFT JOIN public.connector_types ON plugs.connector_type_code = connector_types.code
     GROUP BY stations.station_code, stations.name, stations.status, stations.latitude, stations.longitude, cities.country_code, cities.name, districts.name;
     ```
-    *Amaç:* Mobil uygulamada kullanıcılara istasyon haritası listelenirken, o istasyondaki toplam soket sayısı, müsait soket sayısı, arızalı soket sayısı, maksimum güç kapasitesi ve desteklenen soket tipleri (CCS, Type 2 vb.) tek bir hamlede okunabilir. Client-side join maliyetini ve veri ağ trafiğini sıfıra indirir.
+    *Amaç:* İstasyon haritası listelenirken gereken toplam soket sayısı, müsait soket sayısı, arızalı soket sayısı, maksimum güç kapasitesi ve desteklenen soket tipleri (CCS, Type 2 vb.) tek bir hamlede okunabilir. Client-side join ihtiyacını ve veri ağ trafiğini azaltır.
 
 *   **`public.view_connector_pricing`:**
-    *Amaç:* Zamana bağlı geçerliliği olan fiyat kuralları (`pricing_rules`) ve vergi oranlarını (`tax_rates`) `now()` ile karşılaştırarak şu anda aktif olan birim fiyatları ve vergi katsayısını istemciye tek bir satırda döner. Zaman filtresi sorgularının karmaşıklığı sunucuda çözülür.
+    *Amaç:* Zamana bağlı geçerliliği olan fiyat kuralları (`pricing_rules`) ve vergi oranlarını (`tax_rates`) `now()` ile karşılaştırarak her soket türü için şu anda aktif olan birim fiyatı ve vergi katsayısını tek satırda döner. Zaman filtresi sorgularının karmaşıklığı sunucuda çözülür.
 
 #### 3. TRIGGER (Tetikleyiciler)
 Uygulama sunucusundaki kodların (Express API) veri güncellemelerini kaçırmaması ve otomatik oluşturulması gereken alanların güvenliği için tetikleyiciler kullanılmıştır.
@@ -419,15 +429,15 @@ Uygulama sunucusundaki kodların (Express API) veri güncellemelerini kaçırmam
 Şarj istasyonu oturum süreçleri gibi çoklu tablolarda güncelleme ve doğrulama gerektiren operasyonel işlemler, veri bütünlüğünü korumak adına saklı yordamlar üzerinden atomik birer `transaction` olarak çalıştırılır.
 
 *   **`public.proc_start_session`:**
-    *   *Doğrulamalar:* Kullanıcının aktifliği, başka aktif oturumunun olup olmadığı, seçilen soketin veritabanındaki durumu kontrol edilir.
+    *   *Doğrulamalar:* Kullanıcının aktifliği, başka aktif oturumunun olup olmadığı, araç plakası verilmişse bu aracın kullanıcıya ait olup olmadığı ve seçilen soketin veritabanındaki durumu kontrol edilir.
     *   *Atomik claim:* Soket durumu `'available'` ise tek bir sorguyla `'in_use'` durumuna çekilir. Bu işlem esnasında oluşabilecek çakışmalar (iki kişinin aynı anda aynı soketi seçmesi) engellenir.
     *   *Sonuç:* Başarılı ise yeni bir seans (`sessions`) kaydı açar ve geriye `session_id` döner.
 
 *   **`public.proc_end_session`:**
-    *   *Doğrulamalar:* Seansın aktifliği doğrulanır. Enerji tüketiminin pozitif bir sayı olduğu doğrulanır.
+    *   *Doğrulamalar:* Seansın varlığı ve aktifliği doğrulanır. Mobil kullanıcı çağrılarında seansın ilgili kullanıcıya ait olduğu, enerji tüketiminin ise pozitif bir sayı olduğu kontrol edilir.
     *   *Fiyat ve Vergi Belirleme:* Seansa ait soketin şarj tipine göre güncel geçerli fiyat kuralı (`pricing_rules`) ve vergi katsayısı (`tax_rates`) bulunur.
     *   *Atomik sonlandırma:* Seans durumunu `'completed'` yapar ve soketi tekrar `'available'` durumuna günceller.
-    *   *Fatura Oluşturma:* Oturuma ait fiyat kuralı ve vergi oranını kilitleyen, fatura numarası otomatik hesaplanmış (`R-` ön ekli) yeni bir `receipts` kaydı ekler.
+    *   *Fatura Oluşturma:* Oturuma ait fiyat kuralı ve vergi oranını kilitleyen, fatura numarası otomatik hesaplanmış (`R-` ön ekli) yeni bir `receipts` kaydı ekler; aynı seans için fatura zaten varsa tekrar kayıt oluşturmaz.
 
 ---
 
