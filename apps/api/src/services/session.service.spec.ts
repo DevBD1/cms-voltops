@@ -16,6 +16,28 @@ function selectResult(rows: unknown[]) {
   };
 }
 
+function limitedSelectResult(rows: unknown[]) {
+  return {
+    from: jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnValue({
+        limit: jest.fn().mockResolvedValue(rows),
+      }),
+    }),
+  };
+}
+
+function activeRuleSelectResult(rows: unknown[]) {
+  return {
+    from: jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnValue({
+        orderBy: jest.fn().mockReturnValue({
+          limit: jest.fn().mockResolvedValue(rows),
+        }),
+      }),
+    }),
+  };
+}
+
 function joinedSelectResult(rows: unknown[]) {
   const builder = {
     from: jest.fn(),
@@ -55,9 +77,8 @@ function sessionContextRow(
     startedAt: new Date('2026-06-04T12:00:00.000Z'),
     endedAt: null,
     energyKwh: null,
-    durationMinutes: null,
-    totalPrice: null,
     status: 'active',
+    createdAt: new Date('2026-06-04T12:00:00.000Z'),
     updatedAt: new Date('2026-06-04T12:00:00.000Z'),
     ...sessionOverrides,
   };
@@ -77,24 +98,57 @@ function sessionContextRow(
     plug: {
       plugCode: 'PLUG-1',
       stationCode: 'ST-1',
-      plugType: 'CCS',
+      connectorTypeCode: 'DC_CCS2',
       powerKw: '120',
-      currentType: 'DC',
       status: 'in_use',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    },
+    connectorType: {
+      code: 'DC_CCS2',
+      displayName: 'DC CCS2',
+      currentType: 'DC',
+      vehicleLabel: 'CCS',
     },
     station: {
       stationCode: 'ST-1',
       name: 'Moda Rapid Hub',
-      city: 'Istanbul',
-      district: 'Kadikoy',
+      districtId: 1,
       latitude: '40.987',
       longitude: '29.026',
       status: 'open',
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     },
+    district: {
+      id: 1,
+      cityId: 1,
+      name: 'Kadikoy',
+    },
+    city: {
+      id: 1,
+      countryCode: 'TR',
+      name: 'Istanbul',
+    },
     receipt,
+    pricingRule: receipt
+      ? {
+          id: 1,
+          connectorTypeCode: 'DC_CCS2',
+          pricePerKwh: '7.5000',
+          currency: 'TRY',
+          validFrom: new Date('1970-01-01T00:00:00.000Z'),
+          validTo: null,
+        }
+      : null,
+    taxRate: receipt
+      ? {
+          id: 1,
+          rate: '0.2000',
+          validFrom: new Date('1970-01-01T00:00:00.000Z'),
+          validTo: null,
+        }
+      : null,
   };
 }
 
@@ -226,8 +280,8 @@ describe('SessionService', () => {
 
     expect(joinedQuery.where).toHaveBeenCalledTimes(1);
     expect(joinedQuery.orderBy).toHaveBeenCalledTimes(1);
-    expect(joinedQuery.innerJoin).toHaveBeenCalledTimes(3);
-    expect(joinedQuery.leftJoin).toHaveBeenCalledTimes(1);
+    expect(joinedQuery.innerJoin).toHaveBeenCalledTimes(6);
+    expect(joinedQuery.leftJoin).toHaveBeenCalledTimes(3);
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(listPlugs).not.toHaveBeenCalled();
   });
@@ -236,10 +290,8 @@ describe('SessionService', () => {
     const olderReceipt = {
       receiptNo: 'R-000001',
       sessionId: 1,
-      subtotal: '150',
-      taxAmount: '30',
-      totalAmount: '180',
-      currency: 'TRY',
+      pricingRuleId: 1,
+      taxRateId: 1,
       issuedAt: new Date('2026-06-04T12:10:00.000Z'),
       createdAt: new Date('2026-06-04T12:10:00.000Z'),
       updatedAt: new Date('2026-06-04T12:10:00.000Z'),
@@ -248,7 +300,6 @@ describe('SessionService', () => {
       ...olderReceipt,
       receiptNo: 'R-000002',
       sessionId: 2,
-      totalAmount: '90',
     };
     const joinedQuery = joinedSelectResult([
       sessionContextRow(
@@ -258,8 +309,6 @@ describe('SessionService', () => {
           startedAt: new Date('2026-06-04T13:00:00.000Z'),
           endedAt: new Date('2026-06-04T13:05:00.000Z'),
           energyKwh: '10',
-          durationMinutes: '5',
-          totalPrice: '90',
         },
         newerReceipt,
       ),
@@ -270,8 +319,6 @@ describe('SessionService', () => {
           startedAt: new Date('2026-06-04T12:00:00.000Z'),
           endedAt: new Date('2026-06-04T12:10:00.000Z'),
           energyKwh: '20',
-          durationMinutes: '10',
-          totalPrice: '180',
         },
         olderReceipt,
       ),
@@ -287,7 +334,15 @@ describe('SessionService', () => {
     expect(joinedQuery.orderBy).toHaveBeenCalledTimes(1);
     expect(history.map((session) => session.id)).toEqual([2, 1]);
     expect(history[0].plug.station.name).toBe('Moda Rapid Hub');
-    expect(history[0].receipt).toEqual(newerReceipt);
+    expect(history[0].receipt).toEqual(
+      expect.objectContaining({
+        ...newerReceipt,
+        subtotal: '75.00',
+        taxAmount: '15.00',
+        totalAmount: '90.00',
+        currency: 'TRY',
+      }),
+    );
   });
 
   it('adds a live projection for active sessions', async () => {
@@ -315,8 +370,6 @@ describe('SessionService', () => {
     const completedSession = {
       endedAt: new Date('2026-06-04T12:10:00.000Z'),
       energyKwh: '20',
-      durationMinutes: '10',
-      totalPrice: '180',
       status: 'completed',
       updatedAt: new Date('2026-06-04T12:10:00.000Z'),
     };
@@ -348,8 +401,6 @@ describe('SessionService', () => {
       ...activeSession,
       endedAt: new Date('2026-06-04T12:10:00.000Z'),
       energyKwh: '20',
-      durationMinutes: '10',
-      totalPrice: '180',
       status: 'completed',
       updatedAt: new Date('2026-06-04T12:10:00.000Z'),
     };
@@ -365,7 +416,34 @@ describe('SessionService', () => {
       onConflictDoNothing: jest.fn().mockResolvedValue([]),
     });
     const tx = {
-      select: jest.fn().mockReturnValueOnce(selectResult([activeSession])),
+      select: jest
+        .fn()
+        .mockReturnValueOnce(selectResult([activeSession]))
+        .mockReturnValueOnce(
+          limitedSelectResult([{ connectorTypeCode: 'DC_CCS2' }]),
+        )
+        .mockReturnValueOnce(
+          activeRuleSelectResult([
+            {
+              id: 1,
+              connectorTypeCode: 'DC_CCS2',
+              pricePerKwh: '7.5000',
+              currency: 'TRY',
+              validFrom: new Date('1970-01-01T00:00:00.000Z'),
+              validTo: null,
+            },
+          ]),
+        )
+        .mockReturnValueOnce(
+          activeRuleSelectResult([
+            {
+              id: 1,
+              rate: '0.2000',
+              validFrom: new Date('1970-01-01T00:00:00.000Z'),
+              validTo: null,
+            },
+          ]),
+        ),
       update: jest
         .fn()
         .mockReturnValueOnce({ set: sessionSet })
@@ -387,16 +465,13 @@ describe('SessionService', () => {
     expect(sessionSet).toHaveBeenCalledWith(
       expect.objectContaining({
         energyKwh: '20',
-        durationMinutes: '10',
-        totalPrice: '180',
         status: 'completed',
       }),
     );
     expect(receiptValues).toHaveBeenCalledWith(
       expect.objectContaining({
-        subtotal: '150',
-        taxAmount: '30',
-        totalAmount: '180',
+        pricingRuleId: 1,
+        taxRateId: 1,
       }),
     );
     expect(session.live).toBeUndefined();

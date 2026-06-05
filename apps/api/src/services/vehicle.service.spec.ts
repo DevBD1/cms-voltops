@@ -28,13 +28,16 @@ function orderedSelectResult(rows: unknown[]) {
 }
 
 function profileVehicleResult(vehicleRows: unknown[] = []) {
-  return {
-    from: jest.fn().mockReturnValue({
-      innerJoin: jest.fn().mockReturnValue({
-        where: jest.fn().mockResolvedValue(vehicleRows),
-      }),
-    }),
+  const builder = {
+    from: jest.fn(),
+    innerJoin: jest.fn(),
+    where: jest.fn().mockResolvedValue(vehicleRows),
   };
+
+  builder.from.mockReturnValue(builder);
+  builder.innerJoin.mockReturnValue(builder);
+
+  return builder;
 }
 
 function profileUserResult() {
@@ -108,7 +111,7 @@ describe('VehicleService', () => {
 
     expect(vehicleValues).toHaveBeenCalledWith({
       plateNumber: '34ABC123',
-      connectorType: 'CCS',
+      connectorTypeCode: 'DC_CCS2',
     });
     expect(linkValues).toHaveBeenCalledWith({
       userId: 7,

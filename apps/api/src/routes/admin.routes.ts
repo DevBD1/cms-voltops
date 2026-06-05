@@ -5,17 +5,18 @@ import {
   employees as employeesTable,
   maintenance as maintenanceTable,
   plugs as plugsTable,
+  pricingRules,
   receipts,
   sessions,
   stationEmployees as stationEmployeesTable,
   stations,
+  taxRates,
   tickets as ticketsTable,
   users,
 } from '../db/schema';
 import { AuthService } from '../services/auth.service';
 import {
   CatalogService,
-  deriveCurrentType,
   type StationSummary,
   type PlugDetails,
 } from '../services/catalog.service';
@@ -112,10 +113,27 @@ function toWebPlug(p: PlugDetails) {
     city: p.station.city,
     plugType: p.plugType,
     powerKw: String(p.powerKw),
-    currentType: deriveCurrentType(p.plugType),
+    currentType: p.currentType,
     status: normalizePlugStatus(p.status),
     updatedAt:
       p.updatedAt instanceof Date ? p.updatedAt.toISOString() : p.updatedAt,
+  };
+}
+
+function computeReceiptAmounts(
+  energyKwh: string | null,
+  pricePerKwh: string,
+  taxRate: string,
+) {
+  const subtotal =
+    Math.round(Number(energyKwh ?? 0) * Number(pricePerKwh) * 100) / 100;
+  const taxAmount = Math.round(subtotal * Number(taxRate) * 100) / 100;
+  const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
+
+  return {
+    subtotal: subtotal.toFixed(2),
+    taxAmount: taxAmount.toFixed(2),
+    totalAmount: totalAmount.toFixed(2),
   };
 }
 
@@ -227,13 +245,18 @@ export function createAdminRouter(
         return;
       }
 
+      const districtId = await catalogService.ensureDistrictId(
+        'TR',
+        city,
+        district ?? city,
+      );
+
       const [created] = await db
         .insert(stations)
         .values({
           stationCode,
           name,
-          city,
-          district: district ?? city,
+          districtId,
           latitude: String(latitude),
           longitude: String(longitude),
           status: 'active',
@@ -267,8 +290,14 @@ export function createAdminRouter(
         updatedAt: new Date(),
       };
       if (name !== undefined) updateData.name = name;
-      if (city !== undefined) updateData.city = city;
-      if (district !== undefined) updateData.district = district;
+      if (city !== undefined || district !== undefined) {
+        const current = await catalogService.getStation(req.params.stationCode);
+        updateData.districtId = await catalogService.ensureDistrictId(
+          current.countryCode,
+          city ?? current.city,
+          district ?? current.district,
+        );
+      }
       if (latitude !== undefined) updateData.latitude = String(latitude);
       if (longitude !== undefined) updateData.longitude = String(longitude);
       if (status !== undefined) {
@@ -770,9 +799,8 @@ export function createAdminRouter(
       await db.insert(plugsTable).values({
         plugCode: plugCode.trim(),
         stationCode,
-        plugType,
+        connectorTypeCode: plugType,
         powerKw: String(powerKw),
-        currentType: deriveCurrentType(plugType),
         status: 'available',
       });
 
@@ -872,10 +900,9 @@ export function createAdminRouter(
         .select({
           receiptNo: receipts.receiptNo,
           sessionId: receipts.sessionId,
-          subtotal: receipts.subtotal,
-          taxAmount: receipts.taxAmount,
-          totalAmount: receipts.totalAmount,
-          currency: receipts.currency,
+          pricePerKwh: pricingRules.pricePerKwh,
+          taxRate: taxRates.rate,
+          currency: pricingRules.currency,
           issuedAt: receipts.issuedAt,
           createdAt: receipts.createdAt,
           plugCode: sessions.plugCode,
@@ -883,21 +910,31 @@ export function createAdminRouter(
         })
         .from(receipts)
         .innerJoin(sessions, eq(receipts.sessionId, sessions.id))
+        .innerJoin(pricingRules, eq(receipts.pricingRuleId, pricingRules.id))
+        .innerJoin(taxRates, eq(receipts.taxRateId, taxRates.id))
         .orderBy(receipts.issuedAt);
 
       res.json({
-        data: rows.map((r) => ({
-          receiptNo: r.receiptNo,
-          sessionId: r.sessionId,
-          plugCode: r.plugCode,
-          energyKwh: r.energyKwh ?? null,
-          subtotal: String(r.subtotal),
-          taxAmount: String(r.taxAmount),
-          totalAmount: String(r.totalAmount),
-          currency: r.currency,
-          issuedAt:
-            r.issuedAt instanceof Date ? r.issuedAt.toISOString() : r.issuedAt,
-        })),
+        data: rows.map((r) => {
+          const amounts = computeReceiptAmounts(
+            r.energyKwh,
+            r.pricePerKwh,
+            r.taxRate,
+          );
+
+          return {
+            receiptNo: r.receiptNo,
+            sessionId: r.sessionId,
+            plugCode: r.plugCode,
+            energyKwh: r.energyKwh ?? null,
+            ...amounts,
+            currency: r.currency,
+            issuedAt:
+              r.issuedAt instanceof Date
+                ? r.issuedAt.toISOString()
+                : r.issuedAt,
+          };
+        }),
       });
     } catch (error) {
       sendError(res, error);
@@ -907,8 +944,14 @@ export function createAdminRouter(
   router.get('/receipts/:receiptNo', async (req, res) => {
     try {
       const [row] = await db
-        .select()
+        .select({
+          receipt: receipts,
+          pricingRule: pricingRules,
+          taxRate: taxRates,
+        })
         .from(receipts)
+        .innerJoin(pricingRules, eq(receipts.pricingRuleId, pricingRules.id))
+        .innerJoin(taxRates, eq(receipts.taxRateId, taxRates.id))
         .where(eq(receipts.receiptNo, req.params.receiptNo))
         .limit(1);
 
@@ -920,7 +963,7 @@ export function createAdminRouter(
       const [session] = await db
         .select()
         .from(sessions)
-        .where(eq(sessions.id, row.sessionId))
+        .where(eq(sessions.id, row.receipt.sessionId))
         .limit(1);
 
       const plugRow = session
@@ -928,23 +971,26 @@ export function createAdminRouter(
             .listPlugs({ stationCode: undefined })
             .then((ps) => ps.find((p) => p.plugCode === session.plugCode))
         : undefined;
+      const amounts = computeReceiptAmounts(
+        session?.energyKwh ?? null,
+        row.pricingRule.pricePerKwh,
+        row.taxRate.rate,
+      );
 
       res.json({
         data: {
-          receiptNo: row.receiptNo,
-          sessionId: row.sessionId,
+          receiptNo: row.receipt.receiptNo,
+          sessionId: row.receipt.sessionId,
           plugCode: session?.plugCode ?? null,
           plugType: plugRow?.plugType ?? null,
           stationName: plugRow?.station.name ?? null,
           energyKwh: session?.energyKwh ?? null,
-          subtotal: String(row.subtotal),
-          taxAmount: String(row.taxAmount),
-          totalAmount: String(row.totalAmount),
-          currency: row.currency,
+          ...amounts,
+          currency: row.pricingRule.currency,
           issuedAt:
-            row.issuedAt instanceof Date
-              ? row.issuedAt.toISOString()
-              : row.issuedAt,
+            row.receipt.issuedAt instanceof Date
+              ? row.receipt.issuedAt.toISOString()
+              : row.receipt.issuedAt,
         },
       });
     } catch (error) {

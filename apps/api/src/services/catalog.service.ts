@@ -1,14 +1,27 @@
 import { and, eq, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
-import { plugs, stations } from '../db/schema';
+import {
+  cities,
+  connectorTypes,
+  districts,
+  plugs,
+  stations,
+} from '../db/schema';
 import { HttpError } from '../utils/http';
 
 type Station = typeof stations.$inferSelect;
 type Plug = typeof plugs.$inferSelect;
+type ConnectorTypeRow = typeof connectorTypes.$inferSelect;
+type District = typeof districts.$inferSelect;
+type City = typeof cities.$inferSelect;
+
 export type PlugStatus = 'available' | 'in_use' | 'fault' | 'offline';
 export type StationStatus = 'active' | 'maintenance' | 'offline';
 
 export interface StationSummary extends Station {
+  city: string;
+  district: string;
+  countryCode: string;
   totalPlugs: number;
   availablePlugs: number;
   faultyPlugs: number;
@@ -17,14 +30,26 @@ export interface StationSummary extends Station {
   distanceKm?: number;
 }
 
-/** Maps a raw plug_type string to an AC/DC current type. */
-export function deriveCurrentType(plugType: string): 'AC' | 'DC' {
-  return plugType.toUpperCase().startsWith('AC') ? 'AC' : 'DC';
+export interface PlugDetails extends Plug {
+  plugType: string;
+  currentType: string;
+  station: StationSummary;
+  connectorType: ConnectorTypeRow;
 }
 
-export interface PlugDetails extends Plug {
+type StationJoinedRow = {
   station: Station;
-}
+  district: District;
+  city: City;
+};
+
+type PlugJoinedRow = {
+  plug: Plug;
+  connectorType: ConnectorTypeRow;
+  station: Station;
+  district: District;
+  city: City;
+};
 
 function distanceKm(
   fromLatitude: number,
@@ -58,17 +83,98 @@ function distanceKm(
 }
 
 export class CatalogService {
+  async ensureDistrictId(
+    countryCode: string,
+    cityName: string,
+    districtName: string,
+  ): Promise<number> {
+    const normalizedCountry = countryCode.trim().toUpperCase() || 'TR';
+    const normalizedCity = cityName.trim();
+    const normalizedDistrict = districtName.trim();
+
+    if (!normalizedCity || !normalizedDistrict) {
+      throw new HttpError(400, 'city and district are required');
+    }
+
+    const [existingCity] = await db
+      .select()
+      .from(cities)
+      .where(
+        and(
+          eq(cities.countryCode, normalizedCountry),
+          eq(cities.name, normalizedCity),
+        ),
+      );
+
+    const city =
+      existingCity ??
+      (
+        await db
+          .insert(cities)
+          .values({ countryCode: normalizedCountry, name: normalizedCity })
+          .onConflictDoNothing()
+          .returning()
+      )[0] ??
+      (
+        await db
+          .select()
+          .from(cities)
+          .where(
+            and(
+              eq(cities.countryCode, normalizedCountry),
+              eq(cities.name, normalizedCity),
+            ),
+          )
+      )[0];
+
+    const [existingDistrict] = await db
+      .select()
+      .from(districts)
+      .where(
+        and(
+          eq(districts.cityId, city.id),
+          eq(districts.name, normalizedDistrict),
+        ),
+      );
+
+    const district =
+      existingDistrict ??
+      (
+        await db
+          .insert(districts)
+          .values({ cityId: city.id, name: normalizedDistrict })
+          .onConflictDoNothing()
+          .returning()
+      )[0] ??
+      (
+        await db
+          .select()
+          .from(districts)
+          .where(
+            and(
+              eq(districts.cityId, city.id),
+              eq(districts.name, normalizedDistrict),
+            ),
+          )
+      )[0];
+
+    return district.id;
+  }
+
   async listStations(options?: {
     latitude?: number;
     longitude?: number;
     radiusKm?: number;
   }): Promise<StationSummary[]> {
     const [stationRows, plugRows] = await Promise.all([
-      db.select().from(stations),
-      db.select().from(plugs),
+      this.loadStations(),
+      this.loadPlugs(),
     ]);
-    const summaries = stationRows.map((station) =>
-      this.toStationSummary(station, plugRows),
+    const summaries = stationRows.map((row) =>
+      this.toStationSummary(
+        row,
+        plugRows.map((plugRow) => plugRow.plug),
+      ),
     );
 
     if (options?.latitude === undefined || options.longitude === undefined) {
@@ -95,10 +201,16 @@ export class CatalogService {
     stationCode: string,
   ): Promise<StationSummary & { plugs: PlugDetails[] }> {
     const station = await this.findStation(stationCode);
+    const plugRows = await this.loadPlugs();
 
     return {
-      ...this.toStationSummary(station, await db.select().from(plugs)),
-      plugs: await this.listPlugs({ stationCode }),
+      ...this.toStationSummary(
+        station,
+        plugRows.map((plugRow) => plugRow.plug),
+      ),
+      plugs: plugRows
+        .filter((row) => row.plug.stationCode === station.station.stationCode)
+        .map((row) => this.toPlugDetails(row, plugRows)),
     };
   }
 
@@ -106,29 +218,8 @@ export class CatalogService {
     stationCode?: string;
     status?: string;
   }): Promise<PlugDetails[]> {
-    const conditions: SQL[] = [];
-
-    if (filters?.stationCode) {
-      conditions.push(eq(plugs.stationCode, filters.stationCode));
-    }
-
-    if (filters?.status) {
-      conditions.push(eq(plugs.status, filters.status));
-    }
-
-    const query = db
-      .select()
-      .from(plugs)
-      .innerJoin(stations, eq(plugs.stationCode, stations.stationCode));
-    const rows =
-      conditions.length > 0
-        ? await query.where(and(...conditions))
-        : await query;
-
-    return rows.map((row) => ({
-      ...row.plugs,
-      station: row.stations,
-    }));
+    const rows = await this.loadPlugs(filters);
+    return rows.map((row) => this.toPlugDetails(row, rows));
   }
 
   async setStationStatus(
@@ -145,7 +236,11 @@ export class CatalogService {
       throw new HttpError(404, 'Station not found');
     }
 
-    return this.toStationSummary(station, await db.select().from(plugs));
+    const [joined] = await this.loadStations(stationCode);
+    return this.toStationSummary(
+      joined,
+      (await this.loadPlugs()).map((plugRow) => plugRow.plug),
+    );
   }
 
   async setPlugStatus(
@@ -162,14 +257,70 @@ export class CatalogService {
       throw new HttpError(404, 'Plug not found');
     }
 
-    return this.toPlugDetails(plug, await db.select().from(stations));
+    const rows = await this.loadPlugs();
+    const row = rows.find((item) => item.plug.plugCode === plugCode);
+
+    if (!row) {
+      throw new HttpError(500, `Plug ${plugCode} could not be loaded`);
+    }
+
+    return this.toPlugDetails(row, rows);
   }
 
-  private async findStation(stationCode: string): Promise<Station> {
-    const [station] = await db
-      .select()
+  private async loadStations(
+    stationCode?: string,
+  ): Promise<StationJoinedRow[]> {
+    const query = db
+      .select({
+        station: stations,
+        district: districts,
+        city: cities,
+      })
       .from(stations)
-      .where(eq(stations.stationCode, stationCode));
+      .innerJoin(districts, eq(stations.districtId, districts.id))
+      .innerJoin(cities, eq(districts.cityId, cities.id));
+
+    return stationCode
+      ? query.where(eq(stations.stationCode, stationCode))
+      : query;
+  }
+
+  private async loadPlugs(filters?: {
+    stationCode?: string;
+    status?: string;
+  }): Promise<PlugJoinedRow[]> {
+    const conditions: SQL[] = [];
+
+    if (filters?.stationCode) {
+      conditions.push(eq(plugs.stationCode, filters.stationCode));
+    }
+
+    if (filters?.status) {
+      conditions.push(eq(plugs.status, filters.status));
+    }
+
+    const query = db
+      .select({
+        plug: plugs,
+        connectorType: connectorTypes,
+        station: stations,
+        district: districts,
+        city: cities,
+      })
+      .from(plugs)
+      .innerJoin(
+        connectorTypes,
+        eq(plugs.connectorTypeCode, connectorTypes.code),
+      )
+      .innerJoin(stations, eq(plugs.stationCode, stations.stationCode))
+      .innerJoin(districts, eq(stations.districtId, districts.id))
+      .innerJoin(cities, eq(districts.cityId, cities.id));
+
+    return conditions.length > 0 ? query.where(and(...conditions)) : query;
+  }
+
+  private async findStation(stationCode: string): Promise<StationJoinedRow> {
+    const [station] = await this.loadStations(stationCode);
 
     if (!station) {
       throw new HttpError(404, 'Station not found');
@@ -178,13 +329,19 @@ export class CatalogService {
     return station;
   }
 
-  private toStationSummary(station: Station, plugRows: Plug[]): StationSummary {
+  private toStationSummary(
+    row: StationJoinedRow,
+    plugRows: Plug[],
+  ): StationSummary {
     const stationPlugs = plugRows.filter(
-      (plug) => plug.stationCode === station.stationCode,
+      (plug) => plug.stationCode === row.station.stationCode,
     );
 
     return {
-      ...station,
+      ...row.station,
+      city: row.city.name,
+      district: row.district.name,
+      countryCode: row.city.countryCode,
       totalPlugs: stationPlugs.length,
       availablePlugs: stationPlugs.filter((plug) => plug.status === 'available')
         .length,
@@ -194,19 +351,28 @@ export class CatalogService {
         ...stationPlugs.map((plug) => Number(plug.powerKw)),
         0,
       ),
-      plugTypes: [...new Set(stationPlugs.map((plug) => plug.plugType))],
+      plugTypes: [
+        ...new Set(stationPlugs.map((plug) => plug.connectorTypeCode)),
+      ],
     };
   }
 
-  private toPlugDetails(plug: Plug, stationRows: Station[]): PlugDetails {
-    const station = stationRows.find(
-      (item) => item.stationCode === plug.stationCode,
+  private toPlugDetails(row: PlugJoinedRow, plugRows: PlugJoinedRow[]) {
+    const station = this.toStationSummary(
+      {
+        station: row.station,
+        district: row.district,
+        city: row.city,
+      },
+      plugRows.map((plugRow) => plugRow.plug),
     );
 
-    if (!station) {
-      throw new HttpError(500, `Plug ${plug.plugCode} has no station`);
-    }
-
-    return { ...plug, station };
+    return {
+      ...row.plug,
+      plugType: row.connectorType.code,
+      currentType: row.connectorType.currentType,
+      connectorType: row.connectorType,
+      station,
+    };
   }
 }

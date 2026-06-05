@@ -2,12 +2,10 @@
 
 Canonical source: `apps/api/src/db/schema.ts` and generated migrations in `apps/api/drizzle/`.
 
+The physical database is normalized: connector labels, current type, geography, pricing, tax, session duration, and receipt totals are not stored redundantly in operational rows. API services preserve legacy response names by computing or joining those values on read.
+
 ```mermaid
 erDiagram
-
-    %% =========================
-    %% IDENTITY
-    %% =========================
 
     USERS {
         integer id PK
@@ -27,7 +25,7 @@ erDiagram
 
     EMPLOYEES {
         integer id PK
-        integer user_id FK
+        integer user_id FK,UK
         varchar employee_code UK
         varchar department
         varchar job_title
@@ -37,13 +35,23 @@ erDiagram
         timestamp updated_at
     }
 
+    CITIES {
+        integer id PK
+        varchar country_code
+        varchar name
+    }
+
+    DISTRICTS {
+        integer id PK
+        integer city_id FK
+        varchar name
+    }
+
     ADDRESSES {
         integer id PK
         integer user_id FK
         varchar title
-        varchar country
-        varchar city
-        varchar district
+        integer district_id FK
         varchar neighborhood "nullable"
         varchar avenue "nullable"
         varchar street "nullable"
@@ -53,13 +61,32 @@ erDiagram
         varchar postal_no "nullable"
     }
 
-    %% =========================
-    %% VEHICLES
-    %% =========================
+    CONNECTOR_TYPES {
+        varchar code PK
+        varchar display_name
+        varchar current_type
+        varchar vehicle_label
+    }
+
+    PRICING_RULES {
+        integer id PK
+        varchar connector_type_code FK
+        numeric price_per_kwh
+        varchar currency
+        timestamp valid_from
+        timestamp valid_to "nullable"
+    }
+
+    TAX_RATES {
+        integer id PK
+        numeric rate
+        timestamp valid_from
+        timestamp valid_to "nullable"
+    }
 
     VEHICLES {
         varchar plate_number PK
-        varchar connector_type
+        varchar connector_type_code FK
     }
 
     USER_VEHICLES {
@@ -70,15 +97,10 @@ erDiagram
         boolean is_primary
     }
 
-    %% =========================
-    %% CHARGING OPERATIONS
-    %% =========================
-
     STATIONS {
         varchar station_code PK
         varchar name
-        varchar city
-        varchar district
+        integer district_id FK
         numeric latitude
         numeric longitude
         varchar status
@@ -89,9 +111,8 @@ erDiagram
     PLUGS {
         varchar plug_code PK
         varchar station_code FK
-        varchar plug_type
+        varchar connector_type_code FK
         numeric power_kw
-        varchar current_type
         varchar status
         timestamp created_at
         timestamp updated_at
@@ -113,8 +134,6 @@ erDiagram
         timestamp started_at
         timestamp ended_at "nullable"
         numeric energy_kwh "nullable"
-        numeric duration_minutes "nullable"
-        numeric total_price "nullable"
         varchar status
         timestamp created_at
         timestamp updated_at
@@ -122,19 +141,13 @@ erDiagram
 
     RECEIPTS {
         varchar receipt_no PK
-        integer session_id FK
-        numeric subtotal
-        numeric tax_amount
-        numeric total_amount
-        varchar currency
+        integer session_id FK,UK
+        integer pricing_rule_id FK
+        integer tax_rate_id FK
         timestamp issued_at
         timestamp created_at
         timestamp updated_at
     }
-
-    %% =========================
-    %% SUPPORT & MAINTENANCE
-    %% =========================
 
     MAINTENANCE {
         integer id PK
@@ -164,15 +177,22 @@ erDiagram
         timestamp updated_at
     }
 
-    %% =========================
-    %% RELATIONSHIPS
-    %% =========================
-
     USERS ||--o| EMPLOYEES : has_employee_profile
     USERS ||--o{ ADDRESSES : has
     USERS ||--o{ USER_VEHICLES : owns_or_uses
     USERS ||--o{ SESSIONS : starts
     USERS ||--o{ TICKETS : creates
+
+    CITIES ||--o{ DISTRICTS : contains
+    DISTRICTS ||--o{ ADDRESSES : locates
+    DISTRICTS ||--o{ STATIONS : locates
+
+    CONNECTOR_TYPES ||--o{ PLUGS : classifies
+    CONNECTOR_TYPES ||--o{ VEHICLES : classifies
+    CONNECTOR_TYPES ||--o{ PRICING_RULES : prices
+
+    PRICING_RULES ||--o{ RECEIPTS : determines_price
+    TAX_RATES ||--o{ RECEIPTS : determines_tax
 
     VEHICLES ||--o{ USER_VEHICLES : assigned_to_users
     VEHICLES ||--o{ SESSIONS : used_for
@@ -195,13 +215,24 @@ erDiagram
 
 ## Canonical Constraints
 
-- Unique indexes: `users_auth_user_id_unique`, `users_email_unique`, `users_phone_unique`, `employees_employee_code_unique`.
+- Unique indexes: `users_auth_user_id_unique`, `users_email_unique`, `users_phone_unique`, `employees_employee_code_unique`, `employees_user_id_unique`, `receipts_session_id_unique`, `cities_country_name_unique`, `districts_city_name_unique`, `pricing_rules_connector_valid_from_unique`, and `tax_rates_valid_from_unique`.
 - Composite unique index: `user_vehicles_user_vehicle_unique` on `(user_id, vehicle_plate_number)`.
 - Partial unique index: `sessions_active_user_unique` on `user_id` where `status = 'active'`.
-- Foreign keys use natural station and plug keys: `station_code`, `plug_code`, and `vehicle_plate_number`.
-- `phone`, `password_hash`, `auth_user_id`, `tckn`, `vehicle_plate_number`, `ended_at`, session totals, optional maintenance/ticket assignments, and optional address detail fields are nullable.
+- Foreign keys use natural station, plug, and vehicle keys where those are the table identity: `station_code`, `plug_code`, and `vehicle_plate_number`.
+- `connector_types` owns plug API labels (`plugType`, `currentType`) and mobile vehicle labels. `vehicles` and `plugs` store only `connector_type_code`.
+- `pricing_rules` and `tax_rates` are time-versioned determinants. `receipts` stores only the chosen `pricing_rule_id` and `tax_rate_id`; `subtotal`, `taxAmount`, `totalAmount`, and `currency` are computed through joins.
+- `sessions` stores only event facts. `durationMinutes` is computed from `started_at` and `ended_at`; `totalPrice` is computed from `energy_kwh`, pricing, and tax when a receipt exists.
+- `stations` and `addresses` store `district_id`; city, district, and country code are resolved through `districts` and `cities`.
+- Nullable columns: `phone`, `password_hash`, `auth_user_id`, `tckn`, `vehicle_plate_number`, `ended_at`, `energy_kwh`, optional maintenance/ticket assignments, pricing/tax `valid_to`, and optional address detail fields.
+
+## Seeded Lookup Rows
+
+- `connector_types`: `AC_TYPE2`, `DC_CCS2`, `DC_CHADEMO`, `DC_GB_T`.
+- Initial `pricing_rules`: all connectors at `7.5000 TRY/kWh`, valid from `1970-01-01T00:00:00Z`.
+- Initial `tax_rates`: `0.2000`, valid from `1970-01-01T00:00:00Z`.
 
 ## Security Notes
 
-- Row Level Security is enabled on all app tables by migration `0002_pink_iceman.sql`.
-- Direct public reads from `stations` and `plugs` are revoked for `anon` and `authenticated`; clients should use the Express API for business data.
+- Row Level Security is enabled on app tables by migration `0002_pink_iceman.sql`.
+- Migration `0006_closed_red_skull.sql` enables Row Level Security on `cities`, `districts`, `connector_types`, `pricing_rules`, and `tax_rates`.
+- Direct public reads from app tables are revoked for `anon` and `authenticated`; clients should use the Express API for business data.

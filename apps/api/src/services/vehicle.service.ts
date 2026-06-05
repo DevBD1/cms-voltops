@@ -1,6 +1,12 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { sessions, userVehicles, users, vehicles } from '../db/schema';
+import {
+  connectorTypes,
+  sessions,
+  userVehicles,
+  users,
+  vehicles,
+} from '../db/schema';
 import { HttpError } from '../utils/http';
 
 export type ConnectorType = 'CCS' | 'Type-2' | 'CHAdeMO';
@@ -13,6 +19,16 @@ export const allowedConnectorTypes: ConnectorType[] = [
   'Type-2',
   'CHAdeMO',
 ];
+
+const legacyToConnectorCode: Record<ConnectorType, string> = {
+  CCS: 'DC_CCS2',
+  'Type-2': 'AC_TYPE2',
+  CHAdeMO: 'DC_CHADEMO',
+};
+
+export function toConnectorTypeCode(value: ConnectorType): string {
+  return legacyToConnectorCode[value];
+}
 
 export function normalizePlateNumber(value: string): string {
   return value.trim().toUpperCase().replace(/\s+/g, '');
@@ -56,7 +72,10 @@ export class VehicleService {
 
       await tx
         .insert(vehicles)
-        .values({ plateNumber, connectorType: input.connectorType })
+        .values({
+          plateNumber,
+          connectorTypeCode: toConnectorTypeCode(input.connectorType),
+        })
         .onConflictDoNothing();
       const [createdLink] = await tx
         .insert(userVehicles)
@@ -174,12 +193,17 @@ export class VehicleService {
         relationshipType: userVehicles.relationshipType,
         isPrimary: userVehicles.isPrimary,
         plateNumber: vehicles.plateNumber,
-        connectorType: vehicles.connectorType,
+        connectorType: connectorTypes.vehicleLabel,
+        connectorTypeCode: vehicles.connectorTypeCode,
       })
       .from(userVehicles)
       .innerJoin(
         vehicles,
         eq(userVehicles.vehiclePlateNumber, vehicles.plateNumber),
+      )
+      .innerJoin(
+        connectorTypes,
+        eq(vehicles.connectorTypeCode, connectorTypes.code),
       )
       .where(eq(userVehicles.userId, userId));
 

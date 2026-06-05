@@ -1,10 +1,15 @@
-import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { and, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
+  cities,
+  connectorTypes,
+  districts,
   plugs,
+  pricingRules,
   receipts,
   sessions,
   stations,
+  taxRates,
   users,
   userVehicles,
 } from '../db/schema';
@@ -18,6 +23,9 @@ const demoStartingBatteryPercent = 20;
 const demoMaxBatteryPercent = 95;
 
 type Session = typeof sessions.$inferSelect;
+type Receipt = typeof receipts.$inferSelect;
+type PricingRule = typeof pricingRules.$inferSelect;
+type TaxRate = typeof taxRates.$inferSelect;
 export type SessionStatus = 'active' | 'completed' | 'cancelled';
 
 type SessionContextFilters = {
@@ -171,21 +179,56 @@ export class SessionService {
         throw new HttpError(400, 'energyKwh must be greater than zero');
       }
 
-      const subtotal = Math.round(energyKwh * fallbackPricePerKwh * 100) / 100;
-      const taxAmount = Math.round(subtotal * receiptTaxRate * 100) / 100;
-      const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
-      const durationMinutes = Math.max(
-        1,
-        Math.round((now.getTime() - sessionRow.startedAt.getTime()) / 60000),
-      );
+      const [plug] = await tx
+        .select({
+          connectorTypeCode: plugs.connectorTypeCode,
+        })
+        .from(plugs)
+        .where(eq(plugs.plugCode, sessionRow.plugCode))
+        .limit(1);
+
+      if (!plug) {
+        throw new HttpError(404, 'Plug not found');
+      }
+
+      const [pricingRule] = await tx
+        .select()
+        .from(pricingRules)
+        .where(
+          and(
+            eq(pricingRules.connectorTypeCode, plug.connectorTypeCode),
+            sql`${pricingRules.validFrom} <= ${now}`,
+            sql`(${pricingRules.validTo} is null or ${pricingRules.validTo} > ${now})`,
+          ),
+        )
+        .orderBy(desc(pricingRules.validFrom))
+        .limit(1);
+
+      if (!pricingRule) {
+        throw new HttpError(500, 'Active pricing rule not found');
+      }
+
+      const [taxRate] = await tx
+        .select()
+        .from(taxRates)
+        .where(
+          and(
+            sql`${taxRates.validFrom} <= ${now}`,
+            sql`(${taxRates.validTo} is null or ${taxRates.validTo} > ${now})`,
+          ),
+        )
+        .orderBy(desc(taxRates.validFrom))
+        .limit(1);
+
+      if (!taxRate) {
+        throw new HttpError(500, 'Active tax rate not found');
+      }
 
       const [updatedSession] = await tx
         .update(sessions)
         .set({
           endedAt: now,
           energyKwh: String(energyKwh),
-          durationMinutes: String(durationMinutes),
-          totalPrice: String(totalAmount),
           status: 'completed',
           updatedAt: now,
         })
@@ -201,10 +244,8 @@ export class SessionService {
         .values({
           receiptNo: `R-${String(sessionId).padStart(6, '0')}`,
           sessionId,
-          subtotal: String(subtotal),
-          taxAmount: String(taxAmount),
-          totalAmount: String(totalAmount),
-          currency: 'TRY',
+          pricingRuleId: pricingRule.id,
+          taxRateId: taxRate.id,
           issuedAt: now,
         })
         .onConflictDoNothing();
@@ -245,16 +286,32 @@ export class SessionService {
         session: sessions,
         user: users,
         plug: plugs,
+        connectorType: connectorTypes,
         station: stations,
+        district: districts,
+        city: cities,
         receipt: receipts,
+        pricingRule: pricingRules,
+        taxRate: taxRates,
       })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
       .innerJoin(plugs, eq(sessions.plugCode, plugs.plugCode))
+      .innerJoin(
+        connectorTypes,
+        eq(plugs.connectorTypeCode, connectorTypes.code),
+      )
       .innerJoin(stations, eq(plugs.stationCode, stations.stationCode))
+      .innerJoin(districts, eq(stations.districtId, districts.id))
+      .innerJoin(cities, eq(districts.cityId, cities.id))
       .leftJoin(receipts, eq(receipts.sessionId, sessions.id));
+    const withPricing = query
+      .leftJoin(pricingRules, eq(receipts.pricingRuleId, pricingRules.id))
+      .leftJoin(taxRates, eq(receipts.taxRateId, taxRates.id));
     const filteredQuery =
-      conditions.length > 0 ? query.where(and(...conditions)) : query;
+      conditions.length > 0
+        ? withPricing.where(and(...conditions))
+        : withPricing;
     const rows = await filteredQuery.orderBy(
       desc(sessions.startedAt),
       desc(sessions.id),
@@ -267,8 +324,13 @@ export class SessionService {
     session: Session;
     user: typeof users.$inferSelect;
     plug: typeof plugs.$inferSelect;
+    connectorType: typeof connectorTypes.$inferSelect;
     station: typeof stations.$inferSelect;
-    receipt: typeof receipts.$inferSelect | null;
+    district: typeof districts.$inferSelect;
+    city: typeof cities.$inferSelect;
+    receipt: Receipt | null;
+    pricingRule: PricingRule | null;
+    taxRate: TaxRate | null;
   }) {
     const publicUser = row.user
       ? {
@@ -282,13 +344,40 @@ export class SessionService {
           updatedAt: row.user.updatedAt,
         }
       : undefined;
-    const plug = { ...row.plug, station: row.station };
+    const plug = {
+      ...row.plug,
+      plugType: row.connectorType.code,
+      currentType: row.connectorType.currentType,
+      connectorType: row.connectorType,
+      station: {
+        ...row.station,
+        city: row.city.name,
+        district: row.district.name,
+        countryCode: row.city.countryCode,
+      },
+    };
+    const durationMinutes = computeDurationMinutes(
+      row.session.startedAt,
+      row.session.endedAt,
+    );
+    const receipt =
+      row.receipt && row.pricingRule && row.taxRate
+        ? toComputedReceipt(
+            row.receipt,
+            row.session.energyKwh,
+            row.pricingRule,
+            row.taxRate,
+          )
+        : null;
 
     return {
       ...row.session,
+      durationMinutes:
+        durationMinutes === null ? null : String(durationMinutes),
+      totalPrice: receipt?.totalAmount ?? null,
       user: publicUser,
       plug,
-      receipt: row.receipt ?? null,
+      receipt,
       live:
         row.session.status === 'active'
           ? this.toLiveProjection(row.session, Number(row.plug.powerKw))
@@ -330,4 +419,50 @@ export class SessionService {
       currency: 'TRY',
     };
   }
+}
+
+function computeDurationMinutes(startedAt: Date, endedAt: Date | null) {
+  if (!endedAt) {
+    return null;
+  }
+
+  return Math.max(
+    1,
+    Math.round((endedAt.getTime() - startedAt.getTime()) / 60000),
+  );
+}
+
+function computeTotals(
+  energyKwh: number,
+  pricePerKwh: number,
+  taxRate: number,
+) {
+  const subtotal = Math.round(energyKwh * pricePerKwh * 100) / 100;
+  const taxAmount = Math.round(subtotal * taxRate * 100) / 100;
+  const totalAmount = Math.round((subtotal + taxAmount) * 100) / 100;
+
+  return {
+    subtotal: subtotal.toFixed(2),
+    taxAmount: taxAmount.toFixed(2),
+    totalAmount: totalAmount.toFixed(2),
+  };
+}
+
+function toComputedReceipt(
+  receipt: Receipt,
+  energyKwh: string | null,
+  pricingRule: PricingRule,
+  taxRate: TaxRate,
+) {
+  const totals = computeTotals(
+    Number(energyKwh ?? 0),
+    Number(pricingRule.pricePerKwh),
+    Number(taxRate.rate),
+  );
+
+  return {
+    ...receipt,
+    ...totals,
+    currency: pricingRule.currency,
+  };
 }

@@ -65,7 +65,41 @@ export const employees = pgTable(
     employeeCodeIdx: uniqueIndex('employees_employee_code_unique').on(
       table.employeeCode,
     ),
+    userUniqueIdx: uniqueIndex('employees_user_id_unique').on(table.userId),
     userIdx: index('employees_user_id_idx').on(table.userId),
+  }),
+);
+
+export const cities = pgTable(
+  'cities',
+  {
+    id: serial('id').primaryKey(),
+    countryCode: varchar('country_code', { length: 2 }).notNull(),
+    name: varchar('name', { length: 100 }).notNull(),
+  },
+  (table) => ({
+    countryNameIdx: uniqueIndex('cities_country_name_unique').on(
+      table.countryCode,
+      table.name,
+    ),
+  }),
+);
+
+export const districts = pgTable(
+  'districts',
+  {
+    id: serial('id').primaryKey(),
+    cityId: integer('city_id')
+      .notNull()
+      .references(() => cities.id),
+    name: varchar('name', { length: 100 }).notNull(),
+  },
+  (table) => ({
+    cityNameIdx: uniqueIndex('districts_city_name_unique').on(
+      table.cityId,
+      table.name,
+    ),
+    cityIdx: index('districts_city_id_idx').on(table.cityId),
   }),
 );
 
@@ -77,9 +111,9 @@ export const addresses = pgTable(
       .notNull()
       .references(() => users.id),
     title: varchar('title', { length: 100 }).notNull(),
-    country: varchar('country', { length: 80 }).notNull(),
-    city: varchar('city', { length: 100 }).notNull(),
-    district: varchar('district', { length: 100 }).notNull(),
+    districtId: integer('district_id')
+      .notNull()
+      .references(() => districts.id),
     neighborhood: varchar('neighborhood', { length: 100 }),
     avenue: varchar('avenue', { length: 100 }),
     street: varchar('street', { length: 100 }),
@@ -90,12 +124,62 @@ export const addresses = pgTable(
   },
   (table) => ({
     userIdx: index('addresses_user_id_idx').on(table.userId),
+    districtIdx: index('addresses_district_id_idx').on(table.districtId),
+  }),
+);
+
+export const connectorTypes = pgTable('connector_types', {
+  code: varchar('code', { length: 40 }).primaryKey(),
+  displayName: varchar('display_name', { length: 100 }).notNull(),
+  currentType: varchar('current_type', { length: 10 }).notNull(),
+  vehicleLabel: varchar('vehicle_label', { length: 40 }).notNull(),
+});
+
+export const pricingRules = pgTable(
+  'pricing_rules',
+  {
+    id: serial('id').primaryKey(),
+    connectorTypeCode: varchar('connector_type_code', { length: 40 })
+      .notNull()
+      .references(() => connectorTypes.code),
+    pricePerKwh: numeric('price_per_kwh', {
+      precision: 10,
+      scale: 4,
+    }).notNull(),
+    currency: varchar('currency', { length: 3 }).notNull().default('TRY'),
+    validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
+    validTo: timestamp('valid_to', { withTimezone: true }),
+  },
+  (table) => ({
+    connectorValidFromIdx: uniqueIndex(
+      'pricing_rules_connector_valid_from_unique',
+    ).on(table.connectorTypeCode, table.validFrom),
+    connectorIdx: index('pricing_rules_connector_type_code_idx').on(
+      table.connectorTypeCode,
+    ),
+  }),
+);
+
+export const taxRates = pgTable(
+  'tax_rates',
+  {
+    id: serial('id').primaryKey(),
+    rate: numeric('rate', { precision: 5, scale: 4 }).notNull(),
+    validFrom: timestamp('valid_from', { withTimezone: true }).notNull(),
+    validTo: timestamp('valid_to', { withTimezone: true }),
+  },
+  (table) => ({
+    validFromIdx: uniqueIndex('tax_rates_valid_from_unique').on(
+      table.validFrom,
+    ),
   }),
 );
 
 export const vehicles = pgTable('vehicles', {
   plateNumber: varchar('plate_number', { length: 20 }).primaryKey(),
-  connectorType: varchar('connector_type', { length: 40 }).notNull(),
+  connectorTypeCode: varchar('connector_type_code', { length: 40 })
+    .notNull()
+    .references(() => connectorTypes.code),
 });
 
 export const userVehicles = pgTable(
@@ -123,21 +207,28 @@ export const userVehicles = pgTable(
   }),
 );
 
-export const stations = pgTable('stations', {
-  stationCode: varchar('station_code', { length: 40 }).primaryKey(),
-  name: varchar('name', { length: 150 }).notNull(),
-  city: varchar('city', { length: 100 }).notNull(),
-  district: varchar('district', { length: 100 }).notNull(),
-  latitude: numeric('latitude', { precision: 10, scale: 6 }).notNull(),
-  longitude: numeric('longitude', { precision: 10, scale: 6 }).notNull(),
-  status: varchar('status', { length: 30 }).notNull().default('active'),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const stations = pgTable(
+  'stations',
+  {
+    stationCode: varchar('station_code', { length: 40 }).primaryKey(),
+    name: varchar('name', { length: 150 }).notNull(),
+    districtId: integer('district_id')
+      .notNull()
+      .references(() => districts.id),
+    latitude: numeric('latitude', { precision: 10, scale: 6 }).notNull(),
+    longitude: numeric('longitude', { precision: 10, scale: 6 }).notNull(),
+    status: varchar('status', { length: 30 }).notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    districtIdx: index('stations_district_id_idx').on(table.districtId),
+  }),
+);
 
 export const plugs = pgTable(
   'plugs',
@@ -146,9 +237,10 @@ export const plugs = pgTable(
     stationCode: varchar('station_code', { length: 40 })
       .notNull()
       .references(() => stations.stationCode),
-    plugType: varchar('plug_type', { length: 40 }).notNull(),
+    connectorTypeCode: varchar('connector_type_code', { length: 40 })
+      .notNull()
+      .references(() => connectorTypes.code),
     powerKw: numeric('power_kw', { precision: 8, scale: 2 }).notNull(),
-    currentType: varchar('current_type', { length: 10 }).notNull(),
     status: varchar('status', { length: 30 }).notNull().default('available'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -159,6 +251,9 @@ export const plugs = pgTable(
   },
   (table) => ({
     stationIdx: index('plugs_station_code_idx').on(table.stationCode),
+    connectorIdx: index('plugs_connector_type_code_idx').on(
+      table.connectorTypeCode,
+    ),
   }),
 );
 
@@ -203,8 +298,6 @@ export const sessions = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
     energyKwh: numeric('energy_kwh', { precision: 10, scale: 3 }),
-    durationMinutes: numeric('duration_minutes', { precision: 10, scale: 2 }),
-    totalPrice: numeric('total_price', { precision: 10, scale: 2 }),
     status: varchar('status', { length: 30 }).notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -232,10 +325,12 @@ export const receipts = pgTable(
     sessionId: integer('session_id')
       .notNull()
       .references(() => sessions.id),
-    subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
-    taxAmount: numeric('tax_amount', { precision: 10, scale: 2 }).notNull(),
-    totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull(),
-    currency: varchar('currency', { length: 3 }).notNull().default('TRY'),
+    pricingRuleId: integer('pricing_rule_id')
+      .notNull()
+      .references(() => pricingRules.id),
+    taxRateId: integer('tax_rate_id')
+      .notNull()
+      .references(() => taxRates.id),
     issuedAt: timestamp('issued_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -247,7 +342,14 @@ export const receipts = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    sessionUniqueIdx: uniqueIndex('receipts_session_id_unique').on(
+      table.sessionId,
+    ),
     sessionIdx: index('receipts_session_id_idx').on(table.sessionId),
+    pricingRuleIdx: index('receipts_pricing_rule_id_idx').on(
+      table.pricingRuleId,
+    ),
+    taxRateIdx: index('receipts_tax_rate_id_idx').on(table.taxRateId),
   }),
 );
 

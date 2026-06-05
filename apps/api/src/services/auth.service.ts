@@ -1,7 +1,13 @@
 import { createClient, User } from '@supabase/supabase-js';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { employees, userVehicles, users, vehicles } from '../db/schema';
+import {
+  connectorTypes,
+  employees,
+  userVehicles,
+  users,
+  vehicles,
+} from '../db/schema';
 import '../env';
 import { HttpError } from '../utils/http';
 import { logger } from '../utils/logger';
@@ -185,12 +191,17 @@ export class AuthService {
         relationshipType: userVehicles.relationshipType,
         isPrimary: userVehicles.isPrimary,
         plateNumber: vehicles.plateNumber,
-        connectorType: vehicles.connectorType,
+        connectorType: connectorTypes.vehicleLabel,
+        connectorTypeCode: vehicles.connectorTypeCode,
       })
       .from(userVehicles)
       .innerJoin(
         vehicles,
         eq(userVehicles.vehiclePlateNumber, vehicles.plateNumber),
+      )
+      .innerJoin(
+        connectorTypes,
+        eq(vehicles.connectorTypeCode, connectorTypes.code),
       )
       .where(eq(userVehicles.userId, userId));
 
