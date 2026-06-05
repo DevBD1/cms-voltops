@@ -3,40 +3,10 @@ import { SessionService } from './session.service';
 
 jest.mock('../db/client', () => ({
   db: {
-    transaction: jest.fn(),
+    execute: jest.fn(),
     select: jest.fn(),
   },
 }));
-
-function selectResult(rows: unknown[]) {
-  return {
-    from: jest.fn().mockReturnValue({
-      where: jest.fn().mockResolvedValue(rows),
-    }),
-  };
-}
-
-function limitedSelectResult(rows: unknown[]) {
-  return {
-    from: jest.fn().mockReturnValue({
-      where: jest.fn().mockReturnValue({
-        limit: jest.fn().mockResolvedValue(rows),
-      }),
-    }),
-  };
-}
-
-function activeRuleSelectResult(rows: unknown[]) {
-  return {
-    from: jest.fn().mockReturnValue({
-      where: jest.fn().mockReturnValue({
-        orderBy: jest.fn().mockReturnValue({
-          limit: jest.fn().mockResolvedValue(rows),
-        }),
-      }),
-    }),
-  };
-}
 
 function joinedSelectResult(rows: unknown[]) {
   const builder = {
@@ -53,16 +23,6 @@ function joinedSelectResult(rows: unknown[]) {
   builder.where.mockReturnValue(builder);
 
   return builder;
-}
-
-function updateResult(rows: unknown[]) {
-  return {
-    set: jest.fn().mockReturnValue({
-      where: jest.fn().mockReturnValue({
-        returning: jest.fn().mockResolvedValue(rows),
-      }),
-    }),
-  };
 }
 
 function sessionContextRow(
@@ -152,6 +112,10 @@ function sessionContextRow(
   };
 }
 
+function procedureError(message: string) {
+  return { cause: { message } };
+}
+
 describe('SessionService', () => {
   beforeEach(() => {
     jest.resetAllMocks();
@@ -159,18 +123,9 @@ describe('SessionService', () => {
   });
 
   it('rejects a vehicle plate that is not owned by the session user', async () => {
-    const tx = {
-      select: jest
-        .fn()
-        .mockReturnValueOnce(selectResult([{ id: 7, isActive: true }]))
-        .mockReturnValueOnce(selectResult([]))
-        .mockReturnValueOnce(selectResult([])),
-      update: jest.fn(),
-      insert: jest.fn(),
-    };
     jest
-      .mocked(db.transaction)
-      .mockImplementation(async (callback) => callback(tx as never));
+      .mocked(db.execute)
+      .mockRejectedValueOnce(procedureError('Vehicle not found') as never);
 
     const service = new SessionService({ listPlugs: jest.fn() } as never);
 
@@ -180,22 +135,15 @@ describe('SessionService', () => {
       status: 404,
       message: 'Vehicle not found',
     });
-    expect(tx.update).not.toHaveBeenCalled();
-    expect(tx.insert).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('rejects a second active session for the same user', async () => {
-    const tx = {
-      select: jest
-        .fn()
-        .mockReturnValueOnce(selectResult([{ id: 7, isActive: true }]))
-        .mockReturnValueOnce(selectResult([{ id: 99 }])),
-      update: jest.fn(),
-      insert: jest.fn(),
-    };
     jest
-      .mocked(db.transaction)
-      .mockImplementation(async (callback) => callback(tx as never));
+      .mocked(db.execute)
+      .mockRejectedValueOnce(
+        procedureError('Active session already exists') as never,
+      );
 
     const service = new SessionService({ listPlugs: jest.fn() } as never);
 
@@ -205,34 +153,14 @@ describe('SessionService', () => {
       status: 409,
       message: 'Active session already exists',
     });
-    expect(tx.update).not.toHaveBeenCalled();
-    expect(tx.insert).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('maps active-session unique violations to a conflict', async () => {
-    const insertReturning = jest.fn().mockRejectedValue({
+    jest.mocked(db.execute).mockRejectedValueOnce({
       code: '23505',
       constraint: 'sessions_active_user_unique',
-    });
-    const insertValues = jest
-      .fn()
-      .mockReturnValue({ returning: insertReturning });
-    const tx = {
-      select: jest
-        .fn()
-        .mockReturnValueOnce(selectResult([{ id: 7, isActive: true }]))
-        .mockReturnValueOnce(selectResult([]))
-        .mockReturnValueOnce(selectResult([{ id: 10 }])),
-      update: jest
-        .fn()
-        .mockReturnValue(
-          updateResult([{ plugCode: 'PLUG-1', status: 'available' }]),
-        ),
-      insert: jest.fn().mockReturnValue({ values: insertValues }),
-    };
-    jest
-      .mocked(db.transaction)
-      .mockImplementation(async (callback) => callback(tx as never));
+    } as never);
 
     const service = new SessionService({ listPlugs: jest.fn() } as never);
 
@@ -245,20 +173,9 @@ describe('SessionService', () => {
   });
 
   it('returns a conflict when the atomic plug claim finds an existing non-available plug', async () => {
-    const tx = {
-      select: jest
-        .fn()
-        .mockReturnValueOnce(selectResult([{ id: 7, isActive: true }]))
-        .mockReturnValueOnce(selectResult([]))
-        .mockReturnValueOnce(
-          selectResult([{ plugCode: 'PLUG-1', status: 'in_use' }]),
-        ),
-      update: jest.fn().mockReturnValue(updateResult([])),
-      insert: jest.fn(),
-    };
     jest
-      .mocked(db.transaction)
-      .mockImplementation(async (callback) => callback(tx as never));
+      .mocked(db.execute)
+      .mockRejectedValueOnce(procedureError('Plug is not available') as never);
 
     const service = new SessionService({ listPlugs: jest.fn() } as never);
 
@@ -266,7 +183,7 @@ describe('SessionService', () => {
       status: 409,
       message: 'Plug is not available',
     });
-    expect(tx.insert).not.toHaveBeenCalled();
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it('loads session context with one joined query when listing sessions', async () => {
@@ -387,72 +304,22 @@ describe('SessionService', () => {
     expect(session.live).toBeUndefined();
   });
 
-  it('persists the provided energy estimate when ending a session', async () => {
+  it('calls the end-session procedure and returns the completed session context', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-06-04T12:10:00.000Z'));
-    const activeSession = {
+    const updatedSession = {
       id: 1,
       userId: 7,
       plugCode: 'PLUG-1',
       vehiclePlateNumber: '34ABC123',
       startedAt: new Date('2026-06-04T12:00:00.000Z'),
-      status: 'active',
-    };
-    const updatedSession = {
-      ...activeSession,
       endedAt: new Date('2026-06-04T12:10:00.000Z'),
       energyKwh: '20',
       status: 'completed',
       updatedAt: new Date('2026-06-04T12:10:00.000Z'),
     };
-    const sessionSet = jest.fn().mockReturnValue({
-      where: jest.fn().mockReturnValue({
-        returning: jest.fn().mockResolvedValue([updatedSession]),
-      }),
-    });
-    const plugSet = jest.fn().mockReturnValue({
-      where: jest.fn().mockResolvedValue([]),
-    });
-    const receiptValues = jest.fn().mockReturnValue({
-      onConflictDoNothing: jest.fn().mockResolvedValue([]),
-    });
-    const tx = {
-      select: jest
-        .fn()
-        .mockReturnValueOnce(selectResult([activeSession]))
-        .mockReturnValueOnce(
-          limitedSelectResult([{ connectorTypeCode: 'DC_CCS2' }]),
-        )
-        .mockReturnValueOnce(
-          activeRuleSelectResult([
-            {
-              id: 1,
-              connectorTypeCode: 'DC_CCS2',
-              pricePerKwh: '7.5000',
-              currency: 'TRY',
-              validFrom: new Date('1970-01-01T00:00:00.000Z'),
-              validTo: null,
-            },
-          ]),
-        )
-        .mockReturnValueOnce(
-          activeRuleSelectResult([
-            {
-              id: 1,
-              rate: '0.2000',
-              validFrom: new Date('1970-01-01T00:00:00.000Z'),
-              validTo: null,
-            },
-          ]),
-        ),
-      update: jest
-        .fn()
-        .mockReturnValueOnce({ set: sessionSet })
-        .mockReturnValueOnce({ set: plugSet }),
-      insert: jest.fn().mockReturnValue({ values: receiptValues }),
-    };
     jest
-      .mocked(db.transaction)
-      .mockImplementation(async (callback) => callback(tx as never));
+      .mocked(db.execute)
+      .mockResolvedValueOnce([{ completed_session_id: 1 }] as never);
     jest
       .mocked(db.select)
       .mockReturnValue(
@@ -462,18 +329,21 @@ describe('SessionService', () => {
 
     const session = await service.endSession(1, 20, 7);
 
-    expect(sessionSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        energyKwh: '20',
-        status: 'completed',
-      }),
-    );
-    expect(receiptValues).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pricingRuleId: 1,
-        taxRateId: 1,
-      }),
-    );
+    expect(db.execute).toHaveBeenCalledTimes(1);
     expect(session.live).toBeUndefined();
+  });
+
+  it('calls the start-session procedure and returns the created session context', async () => {
+    jest.mocked(db.execute).mockResolvedValueOnce([{ session_id: 1 }] as never);
+    jest
+      .mocked(db.select)
+      .mockReturnValue(joinedSelectResult([sessionContextRow()]) as never);
+    const service = new SessionService({ listPlugs: jest.fn() } as never);
+
+    const session = await service.startSession(7, 'PLUG-1', '34ABC123');
+
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(session.id).toBe(1);
+    expect(session.live).toBeDefined();
   });
 });

@@ -231,8 +231,20 @@ erDiagram
 - Initial `pricing_rules`: all connectors at `7.5000 TRY/kWh`, valid from `1970-01-01T00:00:00Z`.
 - Initial `tax_rates`: `0.2000`, valid from `1970-01-01T00:00:00Z`.
 
+## Database Interfaces
+
+- Public read views: `view_station_catalog` and `view_connector_pricing`.
+- Session lifecycle procedures used by the Express API: `proc_start_session` and `proc_end_session`.
+- Trigger functions: `set_updated_at` and `set_employee_code`.
+- Timestamp triggers maintain `updated_at` on app tables that expose that column. The employee-code trigger fills `employee_code` as `EMP-XXXX` when omitted.
+- Utility scripts:
+  - `pnpm --filter @voltops/api db:seed`
+  - `pnpm --filter @voltops/api db:reset-seed -- --force`
+  - `pnpm --filter @voltops/api db:verify`
+
 ## Security Notes
 
 - Row Level Security is enabled on app tables by migration `0002_pink_iceman.sql`.
 - Migration `0006_closed_red_skull.sql` enables Row Level Security on `cities`, `districts`, `connector_types`, `pricing_rules`, and `tax_rates`.
 - Direct public reads from app tables are revoked for `anon` and `authenticated`; clients should use the Express API for business data.
+- `anon` and `authenticated` can select only the two non-sensitive public views. They cannot execute session lifecycle procedures directly.

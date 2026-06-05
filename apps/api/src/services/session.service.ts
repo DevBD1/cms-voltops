@@ -11,7 +11,6 @@ import {
   stations,
   taxRates,
   users,
-  userVehicles,
 } from '../db/schema';
 import { HttpError } from '../utils/http';
 import { CatalogService } from './catalog.service';
@@ -55,6 +54,46 @@ function isUniqueViolation(error: unknown, constraintName: string): boolean {
   );
 }
 
+function procedureMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  const candidate = error as {
+    message?: unknown;
+    cause?: { message?: unknown };
+  };
+
+  if (typeof candidate.cause?.message === 'string') {
+    return candidate.cause.message;
+  }
+
+  return typeof candidate.message === 'string' ? candidate.message : null;
+}
+
+function mapProcedureError(error: unknown): never {
+  const message = procedureMessage(error);
+
+  switch (message) {
+    case 'Active user not found':
+    case 'Vehicle not found':
+    case 'Plug not found':
+    case 'Session not found':
+      throw new HttpError(404, message);
+    case 'Active session already exists':
+    case 'Plug is not available':
+    case 'Session is not active':
+      throw new HttpError(409, message);
+    case 'energyKwh must be greater than zero':
+      throw new HttpError(400, message);
+    case 'Active pricing rule not found':
+    case 'Active tax rate not found':
+      throw new HttpError(500, message);
+    default:
+      throw error;
+  }
+}
+
 export class SessionService {
   constructor(private readonly catalogService: CatalogService) {}
 
@@ -70,190 +109,45 @@ export class SessionService {
     plugCode: string,
     vehiclePlateNumber?: string | null,
   ) {
-    const now = new Date();
-
     try {
-      const session = await db.transaction(async (tx) => {
-        const [user] = await tx
-          .select()
-          .from(users)
-          .where(eq(users.id, userId));
+      const result = await db.execute<{ session_id: number }>(
+        sql`call public.proc_start_session(${userId}, ${plugCode}, ${
+          vehiclePlateNumber ?? null
+        }, null)`,
+      );
+      const [session] = result;
 
-        if (!user || !user.isActive) {
-          throw new HttpError(404, 'Active user not found');
-        }
+      if (!session) {
+        throw new HttpError(500, 'Session could not be started');
+      }
 
-        const [activeSession] = await tx
-          .select({ id: sessions.id })
-          .from(sessions)
-          .where(
-            and(eq(sessions.userId, userId), eq(sessions.status, 'active')),
-          );
-
-        if (activeSession) {
-          throw new HttpError(409, 'Active session already exists');
-        }
-
-        if (vehiclePlateNumber) {
-          const [vehicle] = await tx
-            .select({ id: userVehicles.id })
-            .from(userVehicles)
-            .where(
-              and(
-                eq(userVehicles.userId, userId),
-                eq(userVehicles.vehiclePlateNumber, vehiclePlateNumber),
-              ),
-            );
-          if (!vehicle) {
-            throw new HttpError(404, 'Vehicle not found');
-          }
-        }
-
-        const [claimedPlug] = await tx
-          .update(plugs)
-          .set({ status: 'in_use', updatedAt: now })
-          .where(
-            and(eq(plugs.plugCode, plugCode), eq(plugs.status, 'available')),
-          )
-          .returning();
-
-        if (!claimedPlug) {
-          const [plug] = await tx
-            .select()
-            .from(plugs)
-            .where(eq(plugs.plugCode, plugCode));
-
-          if (!plug) {
-            throw new HttpError(404, 'Plug not found');
-          }
-
-          throw new HttpError(409, 'Plug is not available');
-        }
-
-        const [createdSession] = await tx
-          .insert(sessions)
-          .values({
-            userId,
-            plugCode,
-            vehiclePlateNumber: vehiclePlateNumber ?? null,
-            startedAt: now,
-            status: 'active',
-          })
-          .returning();
-
-        return createdSession;
-      });
-
-      return this.loadSessionContext(session.id);
+      return this.loadSessionContext(session.session_id);
     } catch (error) {
       if (isUniqueViolation(error, 'sessions_active_user_unique')) {
         throw new HttpError(409, 'Active session already exists');
       }
 
-      throw error;
+      return mapProcedureError(error);
     }
   }
 
   async endSession(sessionId: number, energyKwh: number, userId?: number) {
-    const now = new Date();
+    try {
+      const result = await db.execute<{ completed_session_id: number }>(
+        sql`call public.proc_end_session(${sessionId}, ${energyKwh}, ${
+          userId ?? null
+        }, null)`,
+      );
+      const [session] = result;
 
-    const session = await db.transaction(async (tx) => {
-      const [sessionRow] = await tx
-        .select()
-        .from(sessions)
-        .where(eq(sessions.id, sessionId));
-
-      if (!sessionRow) {
-        throw new HttpError(404, 'Session not found');
+      if (!session) {
+        throw new HttpError(500, 'Session could not be ended');
       }
 
-      if (userId !== undefined && sessionRow.userId !== userId) {
-        throw new HttpError(404, 'Session not found');
-      }
-
-      if (sessionRow.status !== 'active') {
-        throw new HttpError(409, 'Session is not active');
-      }
-
-      if (energyKwh <= 0) {
-        throw new HttpError(400, 'energyKwh must be greater than zero');
-      }
-
-      const [plug] = await tx
-        .select({
-          connectorTypeCode: plugs.connectorTypeCode,
-        })
-        .from(plugs)
-        .where(eq(plugs.plugCode, sessionRow.plugCode))
-        .limit(1);
-
-      if (!plug) {
-        throw new HttpError(404, 'Plug not found');
-      }
-
-      const [pricingRule] = await tx
-        .select()
-        .from(pricingRules)
-        .where(
-          and(
-            eq(pricingRules.connectorTypeCode, plug.connectorTypeCode),
-            sql`${pricingRules.validFrom} <= ${now}`,
-            sql`(${pricingRules.validTo} is null or ${pricingRules.validTo} > ${now})`,
-          ),
-        )
-        .orderBy(desc(pricingRules.validFrom))
-        .limit(1);
-
-      if (!pricingRule) {
-        throw new HttpError(500, 'Active pricing rule not found');
-      }
-
-      const [taxRate] = await tx
-        .select()
-        .from(taxRates)
-        .where(
-          and(
-            sql`${taxRates.validFrom} <= ${now}`,
-            sql`(${taxRates.validTo} is null or ${taxRates.validTo} > ${now})`,
-          ),
-        )
-        .orderBy(desc(taxRates.validFrom))
-        .limit(1);
-
-      if (!taxRate) {
-        throw new HttpError(500, 'Active tax rate not found');
-      }
-
-      const [updatedSession] = await tx
-        .update(sessions)
-        .set({
-          endedAt: now,
-          energyKwh: String(energyKwh),
-          status: 'completed',
-          updatedAt: now,
-        })
-        .where(eq(sessions.id, sessionId))
-        .returning();
-
-      await tx
-        .update(plugs)
-        .set({ status: 'available', updatedAt: now })
-        .where(eq(plugs.plugCode, sessionRow.plugCode));
-      await tx
-        .insert(receipts)
-        .values({
-          receiptNo: `R-${String(sessionId).padStart(6, '0')}`,
-          sessionId,
-          pricingRuleId: pricingRule.id,
-          taxRateId: taxRate.id,
-          issuedAt: now,
-        })
-        .onConflictDoNothing();
-
-      return updatedSession;
-    });
-
-    return this.loadSessionContext(session.id);
+      return this.loadSessionContext(session.completed_session_id);
+    } catch (error) {
+      return mapProcedureError(error);
+    }
   }
 
   private async loadSessionContext(sessionId: number) {

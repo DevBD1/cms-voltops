@@ -56,3 +56,20 @@ DATABASE_URL=postgresql://postgres:<DB_PASSWORD>@db.yplkmowedhdcclxdgtst.supabas
 If the local network cannot reach the direct database host, use the session pooler string copied from the Supabase Dashboard instead.
 
 The database password is secret. Keep it in a local `.env` file or deployment secret store, not in git.
+
+## Seed and verification
+
+After migrations are applied, the API package provides public-table-only seed utilities:
+
+```sh
+pnpm --filter @voltops/api db:seed
+pnpm --filter @voltops/api db:verify
+```
+
+For a destructive reset plus seed, create a manual Supabase backup first, then run:
+
+```sh
+pnpm --filter @voltops/api db:reset-seed -- --force
+```
+
+The seed scripts do not create Supabase Auth users. Seeded `public.users` rows are deterministic app records that can link to real Supabase Auth users by matching email on first login.

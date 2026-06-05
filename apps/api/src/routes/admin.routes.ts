@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   employees as employeesTable,
@@ -596,10 +596,9 @@ export function createAdminRouter(
           hireDate?: string;
         };
 
-      if (!userId || !employeeCode || !department || !jobTitle || !hireDate) {
+      if (!userId || !department || !jobTitle || !hireDate) {
         res.status(400).json({
-          error:
-            'userId, employeeCode, department, jobTitle ve hireDate gereklidir.',
+          error: 'userId, department, jobTitle ve hireDate gereklidir.',
         });
         return;
       }
@@ -656,7 +655,7 @@ export function createAdminRouter(
         .insert(employeesTable)
         .values({
           userId,
-          employeeCode,
+          employeeCode: employeeCode?.trim() || sql`null`,
           department,
           jobTitle,
           hireDate,

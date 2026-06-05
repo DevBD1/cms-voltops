@@ -50,6 +50,13 @@
       "when": 1780655725404,
       "tag": "0006_closed_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780662200000,
+      "tag": "0007_db_features",
+      "breakpoints": true
     }
   ]
 }

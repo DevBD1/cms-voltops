@@ -1,7 +1,15 @@
 import express from 'express';
 import request from 'supertest';
 import { createAdminRouter } from './admin.routes';
+import { db } from '../db/client';
 import { HttpError } from '../utils/http';
+
+jest.mock('../db/client', () => ({
+  db: {
+    select: jest.fn(),
+    insert: jest.fn(),
+  },
+}));
 
 function createTestApp(authService: { authenticateAdmin: jest.Mock }) {
   const app = express();
@@ -33,7 +41,21 @@ function createTestApp(authService: { authenticateAdmin: jest.Mock }) {
   return app;
 }
 
+function limitedSelectResult(rows: unknown[]) {
+  return {
+    from: jest.fn().mockReturnValue({
+      where: jest.fn().mockReturnValue({
+        limit: jest.fn().mockResolvedValue(rows),
+      }),
+    }),
+  };
+}
+
 describe('createAdminRouter', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
   it('returns 401 without an admin bearer token', async () => {
     const app = createTestApp({
       authenticateAdmin: jest
@@ -102,5 +124,61 @@ describe('createAdminRouter', () => {
     const response = await request(app).options('/api/admin/dashboard');
 
     expect(response.status).toBe(204);
+  });
+
+  it('creates an employee without requiring an explicit employee code', async () => {
+    const authService = {
+      authenticateAdmin: jest
+        .fn()
+        .mockResolvedValue({ appUser: { id: 1 }, employee: { id: 10 } }),
+    };
+    const values = jest.fn().mockReturnValue({
+      returning: jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          userId: 7,
+          employeeCode: 'EMP-0001',
+          department: 'Operations',
+          jobTitle: 'Dispatcher',
+          hireDate: '2026-06-01',
+          status: 'active',
+        },
+      ]),
+    });
+    jest
+      .mocked(db.select)
+      .mockReturnValueOnce(
+        limitedSelectResult([
+          {
+            id: 7,
+            firstName: 'Ada',
+            lastName: 'Yilmaz',
+            email: 'ada@example.com',
+          },
+        ]) as never,
+      )
+      .mockReturnValueOnce(limitedSelectResult([]) as never);
+    jest.mocked(db.insert).mockReturnValueOnce({ values } as never);
+    const app = createTestApp(authService);
+
+    const response = await request(app)
+      .post('/api/admin/employees')
+      .set('Authorization', 'Bearer admin-token')
+      .send({
+        userId: 7,
+        department: 'Operations',
+        jobTitle: 'Dispatcher',
+        hireDate: '2026-06-01',
+      });
+
+    expect(response.status).toBe(201);
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 7,
+        department: 'Operations',
+        jobTitle: 'Dispatcher',
+      }),
+    );
+    expect(response.body.data.employeeCode).toBe('EMP-0001');
   });
 });
